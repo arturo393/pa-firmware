@@ -31,16 +31,16 @@ void i2c1_init() {
 	/* SDC PB9as pull-up */
 	CLEAR_BIT(GPIOB->PUPDR, GPIO_PUPDR_PUPD9_0);
 	SET_BIT(GPIOB->PUPDR, GPIO_PUPDR_PUPD9_1);
-	/*  PB6 as i2c SCL */
-	CLEAR_BIT(GPIOB->AFR[0], GPIO_AFRL_AFSEL6_0);
-	SET_BIT(GPIOB->AFR[0], GPIO_AFRL_AFSEL6_1);
-	SET_BIT(GPIOB->AFR[0], GPIO_AFRL_AFSEL6_2);
-	CLEAR_BIT(GPIOB->AFR[0], GPIO_AFRL_AFSEL6_3);
-	/*  PB7 as i2c SDL */
-	CLEAR_BIT(GPIOB->AFR[0], GPIO_AFRL_AFSEL7_0);
-	SET_BIT(GPIOB->AFR[0], GPIO_AFRL_AFSEL7_1);
-	SET_BIT(GPIOB->AFR[0], GPIO_AFRL_AFSEL7_2);
-	CLEAR_BIT(GPIOB->AFR[0], GPIO_AFRL_AFSEL7_3);
+	/*  PB8 as i2c SCL */
+	CLEAR_BIT(GPIOB->AFR[1], GPIO_AFRH_AFSEL8_0);
+	SET_BIT(GPIOB->AFR[1], GPIO_AFRH_AFSEL8_1);
+	SET_BIT(GPIOB->AFR[1], GPIO_AFRH_AFSEL8_2);
+	CLEAR_BIT(GPIOB->AFR[1], GPIO_AFRH_AFSEL8_3);
+	/*  PB9 as i2c SDL */
+	CLEAR_BIT(GPIOB->AFR[1], GPIO_AFRH_AFSEL9_0);
+	SET_BIT(GPIOB->AFR[1], GPIO_AFRH_AFSEL9_1);
+	SET_BIT(GPIOB->AFR[1], GPIO_AFRH_AFSEL9_2);
+	CLEAR_BIT(GPIOB->AFR[1], GPIO_AFRH_AFSEL9_3);
 
 	/* select normal speed */
 	SET_BIT(RCC->APBENR1, RCC_APBENR1_I2C1EN);
@@ -65,13 +65,17 @@ void i2c1_init() {
 }
 
 char i2c1_byteReceive(char saddr, uint8_t N) {
-
+	uint32_t counter = HAL_GetTick();
+	bool timeout = false;
 	i2c1_start(saddr, READ, N);
 
 	char data = 0;
 	for (int i = 0; i < N; i++) {
 		while (!READ_BIT(I2C1->ISR, I2C_ISR_RXNE)
-				& !READ_BIT(I2C1->ISR, I2C_ISR_NACKF)) {
+				& !READ_BIT(I2C1->ISR, I2C_ISR_NACKF & !timeout)) {
+
+			if (HAL_GetTick() - counter > 500)
+				return 0x00;
 		}
 		data = READ_REG(I2C1->RXDR);
 
@@ -87,10 +91,14 @@ char i2c1_byteReceive(char saddr, uint8_t N) {
 
 void i2c1_byteTransmit(char saddr, char *data, uint8_t N) {
 	i2c1_start(saddr, WRITE, N);
+	uint32_t counter = HAL_GetTick();
 
 	for (int i = 0; i < N; i++) {
 		while (!READ_BIT(I2C1->ISR, I2C_ISR_TXIS)
 				& !READ_BIT(I2C1->ISR, I2C_ISR_NACKF)) {
+
+			if (HAL_GetTick() - counter > 500)
+				return;
 		}
 		MODIFY_REG(I2C1->TXDR, I2C_TXDR_TXDATA, data[i]);
 	}
@@ -124,3 +132,25 @@ void i2c1_start(char saddr, uint8_t transfer_request, uint8_t N) {
 
 }
 
+void i2c1_scanner(uint8_t *addr) {
+	uint32_t counter = HAL_GetTick();
+	uint8_t j = 0;
+	bool timeout = false;
+
+	for (int i = 1; i < 128; i++) {
+		i2c1_start(i << 1 | 1, READ, 1);
+		timeout = false;
+
+		while (!READ_BIT(I2C1->ISR, I2C_ISR_RXNE) & !timeout) {
+
+			if (HAL_GetTick() - counter > 500) {
+				counter = HAL_GetTick();
+				timeout = true;
+			}
+		}
+		if (!timeout) {
+			addr[j++] = i;
+			READ_REG(I2C1->RXDR);
+		}
+	}
+}
