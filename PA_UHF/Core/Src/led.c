@@ -37,3 +37,14 @@ void led_init(void){
 	CLEAR_BIT(GPIOA->MODER, GPIO_MODER_MODE8_1);
 
 }
+
+void led_enable_kalive(uint32_t counter){
+	if (HAL_GetTick() - counter > LED_KA_STATE_TIMEOUT)
+		counter = HAL_GetTick();
+	else {
+		if (HAL_GetTick() - counter > LED_KA_ON_TIMEOUT)
+			sys_rp_led_off();
+		else
+			sys_rp_led_on();
+	}
+}
