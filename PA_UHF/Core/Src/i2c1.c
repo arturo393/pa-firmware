@@ -71,20 +71,16 @@ char i2c1_byteReceive(char saddr, uint8_t N) {
 
 	char data = 0;
 	for (int i = 0; i < N; i++) {
-		while (!READ_BIT(I2C1->ISR, I2C_ISR_RXNE)
-				& !READ_BIT(I2C1->ISR, I2C_ISR_NACKF & !timeout)) {
-
+		while (!READ_BIT(I2C1->ISR, I2C_ISR_RXNE) & !timeout) {
 			if (HAL_GetTick() - counter > 500)
 				return 0x00;
 		}
 		data = READ_REG(I2C1->RXDR);
 
 	}
-	while (!(READ_BIT(I2C1->ISR, I2C_ISR_STOPF)
-			| READ_BIT(I2C1->ISR, I2C_ISR_NACKF))) {
+	while (!(READ_BIT(I2C1->ISR, I2C_ISR_STOPF))) {
 	}
-	SET_BIT(I2C1->ISR, I2C_ICR_STOPCF);
-	SET_BIT(I2C1->ISR, I2C_ICR_NACKCF);
+	SET_BIT(I2C1->ICR, I2C_ICR_STOPCF);
 
 	return data;
 }
@@ -94,8 +90,7 @@ void i2c1_byteTransmit(char saddr, char *data, uint8_t N) {
 	uint32_t counter = HAL_GetTick();
 
 	for (int i = 0; i < N; i++) {
-		while (!READ_BIT(I2C1->ISR, I2C_ISR_TXIS)
-				& !READ_BIT(I2C1->ISR, I2C_ISR_NACKF)) {
+		while (!READ_BIT(I2C1->ISR, I2C_ISR_TXIS)) {
 
 			if (HAL_GetTick() - counter > 500)
 				return;
