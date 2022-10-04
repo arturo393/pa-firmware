@@ -46,10 +46,10 @@ void bda4601_set_att(uint8_t val, uint8_t times) {
 			//HAL_GPIO_WritePin(GPIOA, CLK_ATTENUATOR_Pin, GPIO_PIN_RESET); //Pin clock en bajo
 			mask = mask >> 1; //Muevo la máscara una posición
 		}
-		SET_BIT(GPIOB->MODER, GPIO_MODER_MODE7_0);
+		SET_BIT(GPIOA->MODER, GPIO_MODER_MODE7_0);
 		//HAL_GPIO_WritePin(GPIOA, LE_ATTENUATOR_Pin, GPIO_PIN_SET); //Pin LE en alto
 		HAL_Delay(1);
-		CLEAR_BIT(GPIOB->MODER, GPIO_MODER_MODE7_0);
+		CLEAR_BIT(GPIOA->MODER, GPIO_MODER_MODE7_0);
 		//HAL_GPIO_WritePin(GPIOA, LE_ATTENUATOR_Pin, GPIO_PIN_RESET); //Pin LE en bajo
 	}
 }
