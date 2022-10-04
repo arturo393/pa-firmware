@@ -31,6 +31,12 @@
 #include "stdbool.h"
 #include "bda4601.h"
 #include "led.h"
+#include "module.h"
+#include "rs485.h"
+#include "ad8363.h"
+#include "led.h"
+#include "max4003.h"
+#include "adc.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -51,8 +57,6 @@
 ADC_HandleTypeDef hadc1;
 DMA_HandleTypeDef hdma_adc1;
 
-I2C_HandleTypeDef hi2c1;
-
 IWDG_HandleTypeDef hiwdg;
 
 UART_HandleTypeDef huart1;
@@ -65,74 +69,40 @@ UART_HandleTypeDef huart1;
 #define LED_PIN PB1
 #define DE_PIN PA15
 
-
-#define RX_UART1_BUFFLEN  25
-#define TX_UART1_BUFFLEN  100
 #define LTEL_FRAME_SIZE 14
 #define SIGMA_FRAME_SIZE 14
 #define MEDIA_NUM 20
+#define ADC_CHANNEL_NUM 6
 
-#define STARTING_SECS 5000U
+typedef enum ADC_INDEX {
+	GAIN_i, AD8363_i, VOLTAGE_i, CURRENT_i,	VSWR_i, PIN_i
+} ADC_INDEX_t;
 
-static const uint8_t MODULE_ADDR = 0x08;
-static const uint8_t MODULE_FUNCTION = 0x09;
+typedef enum MAX4003_INDEX{
+	MX_VSWR_i, MX_PIN_i
+}MAX4003_INDEX_t;
 
-static const uint8_t QUERY_PARAMETER_LTEL = 0x11;
-static const uint8_t QUERY_PARAMETER_SIGMA = 0x12;
-static const uint8_t QUERY_PARAMETER_STR = 0x15;
-static const uint8_t QUERY_ADC = 0x16;
-
-static const uint8_t SET_ATT_LTEL = 0x20;
-static const uint8_t SET_POUT_MAX = 0x24;
-static const uint8_t SET_POUT_MIN = 0x23;
+#define STARTING_MILLIS 5000U
 
 static const float ADC_CURRENT_FACTOR = 298.1818182f;
 static const float ADC_VOLTAGE_FACTOR = 0.007404330f;
 
-static const uint8_t LTEL_START_MARK = 0x7e;
-static const uint8_t LTEL_END_MARK = 0x7f;
+UART1_t uart1;
+Module_t pa;
+RS485_t rs485;
+AD8363_t ad8363;
+MAX4003_t max4003[2];
+LED_t led;
 
-static const int8_t POUT_DBM_MAX = 0;
-static const int8_t POUT_DBM_MIN = -30;
-static const uint16_t POUT_ADC_MAX = 1833;
-static const uint16_t POUT_ADC_MIN = 488;
-
-static uint8_t ATT_VALUE_ADDR = 0x00;
-static uint8_t POUT_ADC_MAX_ADDR = 0x03;
-static uint8_t POUT_ADC_MIN_ADDR = 0x05;
-static uint8_t POUT_ISCALIBRATED_ADDR = 0x07;
-
-static uint8_t POUT_ISCALIBRATED = 0xAA;
-
-struct Lna {
-	uint8_t attenuation;
-	uint8_t gain;
-	int8_t pout;
-	uint8_t current;
-	int8_t pin;
-	float voltage;
-};
-
-volatile uint16_t adcResultsDMA[4];
-uint16_t adc0_values[MEDIA_NUM];
-uint16_t adc1_values[MEDIA_NUM];
-uint16_t adc2_values[MEDIA_NUM];
-uint16_t adc3_values[MEDIA_NUM];
-uint16_t adc0_media;
-uint16_t adc1_media;
-uint16_t adc2_media;
-uint16_t adc3_media;
+volatile uint16_t adcResultsDMA[ADC_CHANNEL_NUM];
+uint16_t adc_values[ADC_CHANNEL_NUM][MEDIA_NUM];
+uint16_t adc_media[ADC_CHANNEL_NUM];
+uint16_t sum[ADC_CHANNEL_NUM];
 uint8_t adc_counter = 0;
 
 bool adcDataReady = false;
 
-static const uint16_t LED_STATE_TIMEOUT = 1000;
-static const uint8_t LED_ON_TIMEOUT = 50;
-uint32_t led_counter = 0;
 
-volatile uint8_t UART1_rxBuffer[RX_UART1_BUFFLEN] = { 0 };
-uint8_t UART1_txBuffer[TX_UART1_BUFFLEN] = { 0 };
-bool isDataReady = false;
 
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc);
 
@@ -143,22 +113,12 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_DMA_Init(void);
 static void MX_ADC1_Init(void);
-static void MX_I2C1_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_IWDG_Init(void);
 /* USER CODE BEGIN PFP */
 
-void sigma_set_parameter_frame(uint8_t *frame, struct Lna lna);
-void ltel_set_parameter_frame(uint8_t *frame, struct Lna lna);
-void lna_cmd_action();
-void lna_uart_read();
-bool lna_check_valid_str();
 uint8_t get_db_gain(uint16_t adc_gain);
 uint8_t get_dbm_pout(uint16_t pout_adc);
-struct Lna get_lna();
-void bda4601_set_att(uint8_t attenuation, uint8_t times);
-void adc_media_calc();
-void uart_clean_buffer();
 
 //void uart_reset_reading(UART_HandleTypeDef *huart);
 /* USER CODE END PFP */
@@ -193,28 +153,23 @@ int main(void)
 	SET_BIT(GPIOA->MODER, GPIO_MODER_MODE15_0);
 	CLEAR_BIT(GPIOA->MODER, GPIO_MODER_MODE15_1);
 
-
-
   /* USER CODE END Init */
 
   /* Configure the system clock */
   SystemClock_Config();
 
   /* USER CODE BEGIN SysInit */
-	MX_DMA_Init();
-	MX_ADC1_Init();
-//	MX_IWDG_Init();
+	module_init(&pa, POWER_AMPLIFIER, ID8);
 
 	led_init();
 	i2c1_init();
-	uart1_init(HS16_CLK, BAUD_RATE);
+	uart1_init(HS16_CLK, BAUD_RATE, &uart1);
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
-  //MX_GPIO_Init();
+ // MX_GPIO_Init();
   MX_DMA_Init();
   MX_ADC1_Init();
- // MX_I2C1_Init();
  // MX_USART1_UART_Init();
  // MX_IWDG_Init();
   /* USER CODE BEGIN 2 */
@@ -222,50 +177,145 @@ int main(void)
 // Calibrate The ADC On Power-Up For Better Accuracy
 	HAL_ADCEx_Calibration_Start(&hadc1);
 	uart1_send_str("LNA init\n\r");
+//	uint8_t addrs[4] = {0};
+//	i2c1_scanner(addrs);
+	eeprom_1byte_write(0x01,10);
 
-	uint8_t attenuation = eeprom_1byte_read(ATT_VALUE_ADDR);
-	while (HAL_GetTick() - STARTING_SECS > 0) {
-	bda4601_set_att(attenuation, 3);
+	HAL_Delay(10);
+
+	uint8_t attenuation = eeprom_1byte_read(0x01);
+
+	if (attenuation > 0 && attenuation < 30)
+		bda4601_set_initial_att(attenuation, STARTING_MILLIS);
+	else
+		bda4601_set_att(0, 3);
+
+	if (eeprom_1byte_read(AD8363_ISCALIBRATED_ADDR)  != AD8363_IS_CALIBRATED_OK) {
+		eeprom_2byte_write(AD8363_ADC_MIN_ADDR, AD8363_ADC_MIN);
+		eeprom_2byte_write(AD8363_ADC_MAX_ADDR, AD8363_ADC_MAX);
 	}
-
-if (eeprom_1byte_read(POUT_ISCALIBRATED_ADDR) != POUT_ISCALIBRATED) {
-	eeprom_2byte_write(POUT_ADC_MIN_ADDR, POUT_ADC_MIN);
-	eeprom_2byte_write(POUT_ADC_MAX_ADDR, POUT_ADC_MAX);
-}
 
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
 
-HAL_ADC_Start_DMA(&hadc1, (uint32_t*) adcResultsDMA, 4);
-led_counter = HAL_GetTick();
-while (1) {
+	HAL_ADC_Start_DMA(&hadc1, (uint32_t*) adcResultsDMA, 4);
+	led.ka_counter = HAL_GetTick();
 
-//Fin function 1 second
+	while (1) {
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	if (isDataReady) {
-		lna_cmd_action();
-		isDataReady = false;
-		uart_clean_buffer();
-	} else {
-		lna_uart_read();
-		isDataReady = lna_check_valid_str();
-	}
-	if (HAL_GetTick() - led_counter > LED_STATE_TIMEOUT)
-		led_counter = HAL_GetTick();
-	else {
-		if (HAL_GetTick() - led_counter > LED_ON_TIMEOUT)
-			sys_rp_led_off();
-		else
-			sys_rp_led_on();
-	}
+		switch (rs485.cmd) {
 
-	//HAL_IWDG_Refresh(&hiwdg);
+		case QUERY_PARAMETER_LTEL:
+			pa.pout =	ad8363_get_dbm(&ad8363, adc_media[AD8363_i]);
+			pa.current = ADC_CURRENT_FACTOR * adc_media[CURRENT_i] / 4096.0f;
+			pa.gain = get_db_gain(adc_media[GAIN_i]);
+			pa.att = eeprom_1byte_read(ATT_VALUE_ADDR);
+			pa.vswr = max4003_get_dbm(&max4003[MX_VSWR_i], adc_media[MX_VSWR_i]);
+			pa.pin = 	 max4003_get_dbm(&max4003[MX_PIN_i], adc_media[MX_PIN_i]);
+			rs485.len = 14;
+			rs485.frame = (uint8_t*) malloc(14);
+			rs485_set_query_frame(&rs485, &pa);
+			uart1_send_frame((char*) rs485.frame, 14);
+			free(rs485.frame);
+			uart1_clean_buffer(&uart1);
+			break;
+		case SET_ATT_LTEL:
+			pa.att = uart1.rx_buffer[6];
+			bda4601_set_att(pa.att, 3);
+			eeprom_1byte_write(ATT_VALUE_ADDR, pa.att);
+			sprintf(uart1.tx_buffer, "Attenuation %u\r\n", pa.att);
+			uart1_send_frame((char*) uart1.tx_buffer, TX_BUFFLEN);
+			uart1_clean_buffer(&uart1);
+			break;
+		case SET_POUT_MAX:
+			ad8363_get_dbm(&ad8363, adc_media[AD8363_i]);
+			eeprom_2byte_write(AD8363_ADC_MAX_ADDR, adc_media[AD8363_i]);
+			HAL_Delay(5);
+			eeprom_1byte_write(AD8363_ISCALIBRATED_ADDR, AD8363_IS_CALIBRATED_OK);
+			uart1_send_str("Saved Pout max value\n\r");
+			uart1_clean_buffer(&uart1);
+			break;
+		case SET_POUT_MIN:
+			eeprom_2byte_write(AD8363_ADC_MIN_ADDR, adc_media[AD8363_i]);
+			HAL_Delay(5);
+			eeprom_1byte_write(AD8363_ISCALIBRATED_ADDR, AD8363_IS_CALIBRATED_OK);
+			uart1_send_str("Saved Pout min value\n\r");
+			uart1_clean_buffer(&uart1);
+			break;
+		case SET_PIN_MAX:
+			ad8363_get_dbm(&ad8363, adc_media[AD8363_i]);
+			eeprom_2byte_write(AD8363_ADC_MAX_ADDR, adc_media[AD8363_i]);
+			HAL_Delay(5);
+			eeprom_1byte_write(AD8363_ISCALIBRATED_ADDR, AD8363_IS_CALIBRATED_OK);
+			uart1_send_str("Saved Pout max value\n\r");
+			uart1_clean_buffer(&uart1);
+			break;
+		case SET_PIN_MIN:
+			eeprom_2byte_write(AD8363_ADC_MIN_ADDR, adc_media[AD8363_i]);
+			HAL_Delay(5);
+			eeprom_1byte_write(AD8363_ISCALIBRATED_ADDR, AD8363_IS_CALIBRATED_OK);
+			uart1_send_str("Saved Pout min value\n\r");
+			uart1_clean_buffer(&uart1);
+			break;
+		case SET_VSWR_MAX:
+			ad8363_get_dbm(&ad8363, adc_media[AD8363_i]);
+			eeprom_2byte_write(AD8363_ADC_MAX_ADDR, adc_media[AD8363_i]);
+			HAL_Delay(5);
+			eeprom_1byte_write(AD8363_ISCALIBRATED_ADDR, AD8363_IS_CALIBRATED_OK);
+			uart1_send_str("Saved Pout max value\n\r");
+			uart1_clean_buffer(&uart1);
+			break;
+		case SET_VSWR_MIN:
+			eeprom_2byte_write(AD8363_ADC_MIN_ADDR, adc_media[AD8363_i]);
+			HAL_Delay(5);
+			eeprom_1byte_write(AD8363_ISCALIBRATED_ADDR, AD8363_IS_CALIBRATED_OK);
+			uart1_send_str("Saved Pout min value\n\r");
+			uart1_clean_buffer(&uart1);
+			break;
+		case QUERY_PARAMETER_STR:
+			sprintf(uart1.tx_buffer,
+					"Pout %d[dBm] Att %u[dB] Gain %u[dB] Pin %d[dBm] Curent %d[mA] Voltage %u[V]\r\n",
+					pa.pout, pa.att, pa.gain, pa.pin, pa.current,
+					(uint8_t) pa.voltage);
+			uart1_send_frame((char*) uart1.tx_buffer, TX_BUFFLEN);
+			uart1_clean_buffer(&uart1);
+			break;
+		case QUERY_ADC:
+			sprintf(uart1.tx_buffer,
+					"Pout %d  \t Gain %u \t Curent %u \t Voltage %u\r\n",
+					adc_media[AD8363_i], adc_media[GAIN_i],
+					adc_media[CURRENT_i], adc_media[VOLTAGE_i]);
+			uart1_send_frame((char*) uart1.tx_buffer, TX_BUFFLEN);
+			uart1_clean_buffer(&uart1);
+			break;
+		case QUERY_PARAMETER_SIGMA:
 
-}   //Fin while
+			pa.pout =	ad8363_get_dbm(&ad8363, adc_media[AD8363_i]);
+			pa.current = ADC_CURRENT_FACTOR * adc_media[CURRENT_i] / 4096.0f;
+			pa.gain = get_db_gain(adc_media[GAIN_i]);
+			pa.att = eeprom_1byte_read(ATT_VALUE_ADDR);
+			pa.pin = 	 max4003_get_dbm(&max4003[MX_PIN_i], adc_media[MX_PIN_i]);
+			pa.voltage = ADC_VOLTAGE_FACTOR * (float) adc_media[VOLTAGE_i];
+			pa.vswr = max4003_get_dbm(&max4003[MX_VSWR_i], adc_media[MX_VSWR_i]);
+
+			rs485_set_query_frame(&rs485, &pa);
+			uart1_send_frame((char*) rs485.frame, 14);
+			uart1_clean_buffer(&uart1);
+			break;
+		default:
+			rs485.cmd = rs485_check_frame(uart1.rx_buffer, uart1.rx_count);
+			break;
+		}
+
+		led_enable_kalive(led.sysrp_counter);
+
+
+		//HAL_IWDG_Refresh(&hiwdg);
+	}   //Fin while
   /* USER CODE END 3 */
 }
 
@@ -339,12 +389,12 @@ static void MX_ADC1_Init(void)
   hadc1.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV2;
   hadc1.Init.Resolution = ADC_RESOLUTION_12B;
   hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
-  hadc1.Init.ScanConvMode = ADC_SCAN_DISABLE;
+  hadc1.Init.ScanConvMode = ADC_SCAN_ENABLE;
   hadc1.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
   hadc1.Init.LowPowerAutoWait = DISABLE;
   hadc1.Init.LowPowerAutoPowerOff = DISABLE;
   hadc1.Init.ContinuousConvMode = DISABLE;
-  hadc1.Init.NbrOfConversion = 1;
+  hadc1.Init.NbrOfConversion = 7;
   hadc1.Init.DiscontinuousConvMode = DISABLE;
   hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
   hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
@@ -368,57 +418,63 @@ static void MX_ADC1_Init(void)
   {
     Error_Handler();
   }
+
+  /** Configure Regular Channel
+  */
+  sConfig.Channel = ADC_CHANNEL_1;
+  sConfig.Rank = ADC_REGULAR_RANK_2;
+  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Regular Channel
+  */
+  sConfig.Channel = ADC_CHANNEL_2;
+  sConfig.Rank = ADC_REGULAR_RANK_3;
+  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Regular Channel
+  */
+  sConfig.Channel = ADC_CHANNEL_4;
+  sConfig.Rank = ADC_REGULAR_RANK_4;
+  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Regular Channel
+  */
+  sConfig.Channel = ADC_CHANNEL_5;
+  sConfig.Rank = ADC_REGULAR_RANK_5;
+  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Regular Channel
+  */
+  sConfig.Channel = ADC_CHANNEL_6;
+  sConfig.Rank = ADC_REGULAR_RANK_6;
+  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Regular Channel
+  */
+  sConfig.Channel = ADC_CHANNEL_TEMPSENSOR;
+  sConfig.Rank = ADC_REGULAR_RANK_7;
+  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
   /* USER CODE BEGIN ADC1_Init 2 */
 
   /* USER CODE END ADC1_Init 2 */
-
-}
-
-/**
-  * @brief I2C1 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_I2C1_Init(void)
-{
-
-  /* USER CODE BEGIN I2C1_Init 0 */
-
-  /* USER CODE END I2C1_Init 0 */
-
-  /* USER CODE BEGIN I2C1_Init 1 */
-
-  /* USER CODE END I2C1_Init 1 */
-  hi2c1.Instance = I2C1;
-  hi2c1.Init.Timing = 0x10707DBC;
-  hi2c1.Init.OwnAddress1 = 0;
-  hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
-  hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
-  hi2c1.Init.OwnAddress2 = 0;
-  hi2c1.Init.OwnAddress2Masks = I2C_OA2_NOMASK;
-  hi2c1.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
-  hi2c1.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
-  if (HAL_I2C_Init(&hi2c1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-
-  /** Configure Analogue filter
-  */
-  if (HAL_I2CEx_ConfigAnalogFilter(&hi2c1, I2C_ANALOGFILTER_ENABLE) != HAL_OK)
-  {
-    Error_Handler();
-  }
-
-  /** Configure Digital filter
-  */
-  if (HAL_I2CEx_ConfigDigitalFilter(&hi2c1, 0) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN I2C1_Init 2 */
-
-  /* USER CODE END I2C1_Init 2 */
 
 }
 
@@ -539,6 +595,14 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(SYS_RP_GPIO_Port, SYS_RP_Pin, GPIO_PIN_RESET);
 
+  /*Configure GPIO pins : PB9 PB8 */
+  GPIO_InitStruct.Pin = GPIO_PIN_9|GPIO_PIN_8;
+  GPIO_InitStruct.Mode = GPIO_MODE_AF_OD;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  GPIO_InitStruct.Alternate = GPIO_AF6_I2C1;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
   /*Configure GPIO pin : TEMP_INT_Pin */
   GPIO_InitStruct.Pin = TEMP_INT_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
@@ -572,236 +636,50 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 
-void ltel_set_parameter_frame(uint8_t *frame, struct Lna lna) {
-uint8_t crc_frame[2];
-uint16_t crc;
-frame[0] = LTEL_START_MARK;
-frame[1] = MODULE_FUNCTION;
-frame[2] = MODULE_ADDR;
-frame[3] = QUERY_PARAMETER_LTEL;
-frame[4] = 0x00;
-frame[5] = 0x05;
-frame[6] = 0x00;
-frame[7] = lna.attenuation;
-frame[8] = lna.gain;
-frame[9] = lna.pout;
-frame[10] = lna.voltage;
-crc = crc_get(&(frame[1]), 10);
-memcpy(crc_frame, &crc, 2);
-frame[11] = crc_frame[0];
-frame[12] = crc_frame[1];
-frame[13] = LTEL_END_MARK;
-}
-
-void sigma_set_parameter_frame(uint8_t *frame, struct Lna lna) {
-uint8_t crc_frame[2];
-uint16_t crc;
-frame[0] = LTEL_START_MARK;
-frame[1] = MODULE_FUNCTION;
-frame[2] = MODULE_ADDR;
-frame[3] = QUERY_PARAMETER_SIGMA;
-frame[4] = 0x06;
-frame[5] = lna.pout;
-frame[6] = lna.attenuation;
-frame[7] = lna.gain;
-frame[8] = lna.current;
-frame[9] = lna.voltage;
-frame[10] = lna.pin;
-crc = crc_get(&(frame[1]), 10);
-memcpy(crc_frame, &crc, 2);
-frame[11] = crc_frame[0];
-frame[12] = crc_frame[1];
-frame[13] = LTEL_END_MARK;
-}
-
 uint8_t get_db_gain(uint16_t adc_gain) {
 
-if (adc_gain >= 3781)
-	return 45;
-else if (adc_gain < 3781 && adc_gain >= 1515)
-	return 0.0022f * adc_gain + 36.6571f;
-else if (adc_gain < 1515 && adc_gain >= 1188)
-	return (0.0153f * adc_gain + 16.8349f);
-else if (adc_gain < 1188 && adc_gain >= 1005)
-	return (0.0273f * adc_gain + 2.540f);
-else if (adc_gain < 1005 && adc_gain >= 897)
-	return (0.0463f * adc_gain - 16.5278f);
-else if (adc_gain < 897 && adc_gain >= 825)
-	return (0.0694f * adc_gain - 37.2917f);
-else if (adc_gain < 825 && adc_gain >= 776)
-	return (0.1020f * adc_gain - 64.1837f);
-else if (adc_gain < 776 && adc_gain >= 746)
-	return (0.1667f * adc_gain - 114.333f);
-else if (adc_gain < 746 && adc_gain >= 733)
-	return (0.3846f * adc_gain - 276.9231f);
-else if (adc_gain < 733 && adc_gain >= 725)
-	return (0.625f * adc_gain - 453.125f);
-else if (adc_gain < 725)
+	if (adc_gain >= 3781)
+		return 45;
+	else if (adc_gain < 3781 && adc_gain >= 1515)
+		return 0.0022f * adc_gain + 36.6571f;
+	else if (adc_gain < 1515 && adc_gain >= 1188)
+		return (0.0153f * adc_gain + 16.8349f);
+	else if (adc_gain < 1188 && adc_gain >= 1005)
+		return (0.0273f * adc_gain + 2.540f);
+	else if (adc_gain < 1005 && adc_gain >= 897)
+		return (0.0463f * adc_gain - 16.5278f);
+	else if (adc_gain < 897 && adc_gain >= 825)
+		return (0.0694f * adc_gain - 37.2917f);
+	else if (adc_gain < 825 && adc_gain >= 776)
+		return (0.1020f * adc_gain - 64.1837f);
+	else if (adc_gain < 776 && adc_gain >= 746)
+		return (0.1667f * adc_gain - 114.333f);
+	else if (adc_gain < 746 && adc_gain >= 733)
+		return (0.3846f * adc_gain - 276.9231f);
+	else if (adc_gain < 733 && adc_gain >= 725)
+		return (0.625f * adc_gain - 453.125f);
+	else if (adc_gain < 725)
+		return 0;
 	return 0;
-return 0;
-}
-
-uint8_t get_dbm_pout(uint16_t pout_adc) {
-uint16_t adc_max = 0;
-uint16_t adc_min = 0;
-
-//	do {
-adc_max = eeprom_2byte_read(POUT_ADC_MAX_ADDR);
-HAL_Delay(2);
-adc_min = eeprom_2byte_read(POUT_ADC_MIN_ADDR);
-//	} while (adc_max == adc_min);
-
-float m = (float) (POUT_DBM_MAX - POUT_DBM_MIN) / (float) (adc_max - adc_min);
-float b = POUT_DBM_MAX - adc_max * m;
-
-if (pout_adc > adc_max) {
-	return POUT_DBM_MAX;
-} else if (pout_adc < adc_min) {
-	return POUT_DBM_MIN;
-}
-
-return (int8_t) (m * (float) pout_adc + b);
-}
-
-struct Lna get_lna() {
-
-struct Lna lna;
-adc_media_calc();
-lna.pout = get_dbm_pout(adc0_media);
-lna.current = ADC_CURRENT_FACTOR * adc1_media / 4096.0f;
-lna.gain = get_db_gain(adc2_media);
-lna.voltage = ADC_VOLTAGE_FACTOR * (float) adc3_media;
-lna.attenuation = eeprom_1byte_read(ATT_VALUE_ADDR);
-lna.pin = lna.pout - lna.gain + lna.attenuation;
-return lna;
-}
-
-void lna_cmd_action() {
-uint8_t lna_cmd = UART1_rxBuffer[3];
-if (lna_cmd == QUERY_PARAMETER_LTEL) {
-	struct Lna lna;
-	uint8_t frame[14];
-	lna = get_lna();
-	ltel_set_parameter_frame(frame, lna);
-	uart1_send_frame((char*) frame, 14);
-} else if (lna_cmd == SET_ATT_LTEL) {
-	uint8_t attenuation_value = UART1_rxBuffer[6];
-	bda4601_set_att(attenuation_value, 3);
-	eeprom_1byte_write(ATT_VALUE_ADDR, attenuation_value);
-	sprintf(UART1_txBuffer, "Attenuation %u\r\n", attenuation_value);
-	uart1_send_frame((char*) UART1_txBuffer, TX_UART1_BUFFLEN);
-} else if (lna_cmd == SET_POUT_MAX) {
-	eeprom_2byte_write(POUT_ADC_MAX_ADDR, adc0_media);
-	HAL_Delay(5);
-	eeprom_1byte_write(POUT_ISCALIBRATED_ADDR, POUT_ISCALIBRATED);
-	uart1_send_str("Saved Pout max value\n\r");
-
-} else if (lna_cmd == SET_POUT_MIN) {
-	eeprom_2byte_write(POUT_ADC_MIN_ADDR, adc0_media);
-	HAL_Delay(5);
-	eeprom_1byte_write(POUT_ISCALIBRATED_ADDR, POUT_ISCALIBRATED);
-	uart1_send_str("Saved Pout min value\n\r");
-
-} else if (lna_cmd == QUERY_PARAMETER_STR) {
-	struct Lna lna;
-	lna = get_lna();
-	sprintf(UART1_txBuffer,
-			"Pout %d[dBm] Att %u[dB] Gain %u[dB] Pin %d[dBm] Curent %d[mA] Voltage %u[V]\r\n",
-			lna.pout, lna.attenuation, lna.gain, lna.pin, lna.current,
-			(uint8_t) lna.voltage);
-	uart1_send_frame((char*) UART1_txBuffer, TX_UART1_BUFFLEN);
-
-} else if (lna_cmd == QUERY_ADC) {
-	adc_media_calc();
-	sprintf(UART1_txBuffer,
-			"Pout %d  \t Gain %u \t Curent %u \t Voltage %u\r\n", adc0_media,
-			adc1_media, adc2_media, adc3_media);
-	uart1_send_frame((char*) UART1_txBuffer, TX_UART1_BUFFLEN);
-
-} else if (lna_cmd == QUERY_PARAMETER_SIGMA) {
-	struct Lna lna;
-	uint8_t frame[LTEL_FRAME_SIZE];
-	lna = get_lna();
-	sigma_set_parameter_frame(frame, lna);
-	uart1_send_frame((char*) frame, LTEL_FRAME_SIZE);
-}
-}
-
-void lna_uart_read() {
-uint8_t rcvcount = 0;
-uint32_t tickstart = HAL_GetTick();
-bool timeout = false;
-uint8_t timeout_value = 10;
-
-while (rcvcount < RX_UART1_BUFFLEN && timeout == false) {
-	if (((HAL_GetTick() - tickstart) > timeout_value)
-			|| (timeout_value == 0U)) {
-		timeout = true;
-		if (READ_BIT(USART1->ISR, USART_ISR_ORE))
-			SET_BIT(USART1->ICR, USART_ICR_ORECF);
-		if (READ_BIT(USART1->ISR, USART_ISR_IDLE))
-			SET_BIT(USART1->ICR, USART_ICR_IDLECF);
-		if (READ_BIT(USART1->ISR, USART_ISR_FE))
-			SET_BIT(USART1->ICR, USART_ICR_FECF);
-	}
-
-	if (READ_BIT(USART1->ISR, USART_ISR_RXNE_RXFNE))
-		UART1_rxBuffer[rcvcount++] = USART1->RDR;
-}
-}
-
-bool lna_check_valid_str() {
-bool is_valid_data = false;
-if (UART1_rxBuffer[0] == LTEL_START_MARK)
-	if (UART1_rxBuffer[1] == MODULE_FUNCTION)
-		if (UART1_rxBuffer[2] == MODULE_ADDR)
-			for (int i = 3; i < RX_UART1_BUFFLEN && is_valid_data == false; i++)
-				is_valid_data = UART1_rxBuffer[i] == LTEL_END_MARK ?
-				true :
-																		false;
-return is_valid_data;
-}
-
-
-
-void uart_clean_buffer() {
-for (int i = 0; i < TX_UART1_BUFFLEN; i++) {
-	if (i < RX_UART1_BUFFLEN)
-		UART1_rxBuffer[i] = 0x00;
-	UART1_txBuffer[i] = 0x00;
-}
-}
-void adc_media_calc() {
-uint32_t sum0 = 0;
-uint32_t sum1 = 0;
-uint32_t sum2 = 0;
-uint32_t sum3 = 0;
-
-for (int i = 0; i < MEDIA_NUM; i++) {
-	sum0 += adcResultsDMA[0];
-	sum1 += adcResultsDMA[1];
-	sum2 += adcResultsDMA[2];
-	sum3 += adcResultsDMA[3];
-}
-adc0_media = sum0 / MEDIA_NUM;
-adc1_media = sum1 / MEDIA_NUM;
-adc2_media = sum2 / MEDIA_NUM;
-adc3_media = sum3 / MEDIA_NUM;
 }
 
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc) {
-// TODO : se puede reemplazar leyendo el flag del registro
-if (adc_counter < MEDIA_NUM) {
-	adc0_values[adc_counter] = adcResultsDMA[0];
-	adc1_values[adc_counter] = adcResultsDMA[1];
-	adc2_values[adc_counter] = adcResultsDMA[2];
-	adc3_values[adc_counter] = adcResultsDMA[3];
-	adc_counter++;
-} else {
-	adc_counter = 0;
-}
-HAL_ADC_Start_DMA(&hadc1, (uint32_t*) adcResultsDMA, 4);
 
+	for (int i = 0; i < ADC_CHANNEL_NUM; i++) {
+		sum[i] -= adc_values[i][adc_counter];
+		adc_values[i][adc_counter] = adcResultsDMA[i];
+		sum[i] += adc_values[i][adc_counter];
+		adc_media[i] = sum[i] / MEDIA_NUM;
+	}
+	adc_counter++;
+
+	if (adc_counter >= MEDIA_NUM)
+		adc_counter = 0;
+	HAL_ADC_Start_DMA(&hadc1, (uint32_t*) adcResultsDMA, ADC_CHANNEL_NUM);
+}
+
+void USART1_IRQHandler(void) {
+	uart1_read_to_frame(&uart1);
 }
 /* USER CODE END 4 */
 
@@ -812,10 +690,10 @@ HAL_ADC_Start_DMA(&hadc1, (uint32_t*) adcResultsDMA, 4);
 void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
-/* User can add his own implementation to report the HAL error return state */
-__disable_irq();
-while (1) {
-}
+	/* User can add his own implementation to report the HAL error return state */
+	__disable_irq();
+	while (1) {
+	}
   /* USER CODE END Error_Handler_Debug */
 }
 
