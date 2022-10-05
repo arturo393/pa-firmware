@@ -1,0 +1,2 @@
+../Core/Src/ad8363.c:10:9:ad8363_get_dbm	24	static
+../Core/Src/ad8363.c:24:6:ad8363_check_calibration	16	static

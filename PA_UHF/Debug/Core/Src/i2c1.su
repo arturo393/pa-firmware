@@ -1,0 +1,5 @@
+../Core/Src/i2c1.c:10:6:i2c1_init	8	static
+../Core/Src/i2c1.c:67:6:i2c1_byteReceive	32	static
+../Core/Src/i2c1.c:88:6:i2c1_byteTransmit	24	static
+../Core/Src/i2c1.c:107:6:i2c1_start	24	static
+../Core/Src/i2c1.c:130:6:i2c1_scanner	40	static

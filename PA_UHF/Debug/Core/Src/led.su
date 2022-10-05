@@ -1,0 +1,2 @@
+../Core/Src/led.c:13:6:led_init	8	static
+../Core/Src/led.c:41:6:led_enable_kalive	16	static
