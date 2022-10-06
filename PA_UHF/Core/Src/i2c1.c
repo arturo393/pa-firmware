@@ -28,7 +28,7 @@ void i2c1_init() {
 	/* SCL PB8 as pull-up */
 	CLEAR_BIT(GPIOB->PUPDR, GPIO_PUPDR_PUPD8_0);
 	SET_BIT(GPIOB->PUPDR, GPIO_PUPDR_PUPD8_1);
-	/* SDC PB9as pull-up */
+	/* SDC PB9 as pull-up */
 	CLEAR_BIT(GPIOB->PUPDR, GPIO_PUPDR_PUPD9_0);
 	SET_BIT(GPIOB->PUPDR, GPIO_PUPDR_PUPD9_1);
 	/*  PB8 as i2c SCL */
@@ -56,6 +56,7 @@ void i2c1_init() {
 // 	ATOMIC_MODIFY_REG(I2C1->TIMINGR, I2C_TIMINGR_SCLL, 0xBC);
 
 	MODIFY_REG(I2C1->TIMINGR, 0X10111111U, 0X10707DBCU);
+
 	/*i2c Rx interrupt enable */
 	SET_BIT(I2C1->CR1, I2C_CR1_RXIE);
 	SET_BIT(I2C1->CR1, I2C_CR1_TXIE);
@@ -85,7 +86,27 @@ char i2c1_byteReceive(char saddr, uint8_t N) {
 	return data;
 }
 
-void i2c1_byteTransmit(char saddr, char *data, uint8_t N) {
+void  i2c1_buffReceive(char saddr, char *rcv,  uint8_t N) {
+	uint32_t counter = HAL_GetTick();
+	bool timeout = false;
+	i2c1_start(saddr, READ, N);
+
+	char data = 0;
+	for (int i = 0; i < N; i++) {
+		while (!READ_BIT(I2C1->ISR, I2C_ISR_RXNE) & !timeout) {
+			if (HAL_GetTick() - counter > 500)
+				return 0x00;
+		}
+		rcv[i] = READ_REG(I2C1->RXDR);
+
+	}
+	while (!(READ_BIT(I2C1->ISR, I2C_ISR_STOPF))) {
+	}
+	SET_BIT(I2C1->ICR, I2C_ICR_STOPCF);
+
+}
+
+void i2c1_byteTransmit(char saddr, uint8_t *data, uint8_t N) {
 	i2c1_start(saddr, WRITE, N);
 	uint32_t counter = HAL_GetTick();
 
