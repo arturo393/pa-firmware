@@ -17,7 +17,7 @@
 #define MAX4003_ADC_MAX 1883
 #define MAX4003_ADC_MIN 488
 
-#define MAX4003_IS_CALIBRATED_OK 0xAA
+#define MAX4003_IS_CALIBRATED 0xAA
 
 typedef struct  MAX4003{
 uint16_t max;

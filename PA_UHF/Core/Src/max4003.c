@@ -21,5 +21,5 @@ uint8_t max4003_get_dbm( MAX4003_t *mx,uint16_t value) {
 }
 
 bool  max4003_check_calibration(uint8_t value){
-	return value !=  MAX4003_IS_CALIBRATED_OK ? true: false;
+	return value !=  MAX4003_IS_CALIBRATED ? true: false;
 }

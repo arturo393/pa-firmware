@@ -12,7 +12,7 @@
 #define AD8363_ADC_MAX 1883
 #define AD8363_ADC_MIN 488
 
-#define AD8363_IS_CALIBRATED_OK 0xAA
+#define AD8363_IS_CALIBRATED 0xAA
 
 typedef struct AD8363{
 uint16_t max;
