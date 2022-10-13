@@ -25,6 +25,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <uart1.h>
+#include <math.h>
 #include "eeprom.h"
 #include "utils.h"
 #include "i2c1.h"
@@ -37,6 +38,7 @@
 #include "led.h"
 #include "max4003.h"
 #include "adc.h"
+#include "lm75.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -158,6 +160,7 @@ int main(void) {
 	led_init();
 	i2c1_init();
 	uart1_init(HS16_CLK, BAUD_RATE, &uart1);
+	lm75_init();
 	/* USER CODE END SysInit */
 
 	/* Initialize all configured peripherals */
@@ -184,6 +187,24 @@ int main(void) {
 		eeprom_write(POUT_ADC_MIN_ADDR, AD8363_ADC_MIN);
 		eeprom_write(POUT_ADC_MAX_ADDR, AD8363_ADC_MAX);
 	}
+	if (eeprom_1byte_read(PIN_IS_CALIBRATED_ADDR) != MAX4003_IS_CALIBRATED) {
+		eeprom_write(PIN_ADC_MIN_ADDR, MAX4003_ADC_MIN);
+		eeprom_write(PIN_ADC_MAX_ADDR, MAX4003_ADC_MAX);
+	}
+	if (eeprom_1byte_read(VSWR_IS_CALIBRATED_ADDR) != MAX4003_IS_CALIBRATED) {
+		eeprom_write(VSWR_ADC_MIN_ADDR, MAX4003_ADC_MIN);
+		eeprom_write(VSWR_ADC_MAX_ADDR, MAX4003_IS_CALIBRATED);
+	}
+
+	pin.max = eeprom_read(PIN_ADC_MAX_ADDR);
+	pin.min = eeprom_read(PIN_ADC_MIN_ADDR);
+	pout.max = eeprom_read(POUT_ADC_MAX_ADDR);
+	pout.min = eeprom_read(POUT_ADC_MIN_ADDR);
+	vswr.max = eeprom_read(VSWR_ADC_MAX_ADDR);
+	vswr.min = eeprom_read(VSWR_ADC_MIN_ADDR);
+
+
+
 
 	/* USER CODE END 2 */
 
@@ -197,14 +218,27 @@ int main(void) {
 		/* USER CODE END WHILE */
 
 		/* USER CODE BEGIN 3 */
+
+		HAL_Delay(1000);
+		pa.temperature = lm75_read();
+
+		pa.pr = max4003_get_dbm(&vswr, adc_media[VSWR_i]);
+		pa.pout = ad8363_get_dbm(&pout, adc_media[AD8363_i]);
+		pa.current = ADC_CURRENT_FACTOR * adc_media[CURRENT_i] / 4096.0f;
+		pa.gain = get_db_gain(adc_media[GAIN_i]);
+		pa.att = eeprom_1byte_read(ATT_VALUE_ADDR);
+		pa.vswr =module_vswr_calc(pa.pout, pa.pr);
+		pa.pin = max4003_get_dbm(&pin, adc_media[PIN_i]);
+
 		switch (rs485.cmd) {
 
 		case QUERY_PARAMETER_LTEL:
+			pa.pr = max4003_get_dbm(&vswr, adc_media[VSWR_i]);
 			pa.pout = ad8363_get_dbm(&pout, adc_media[AD8363_i]);
 			pa.current = ADC_CURRENT_FACTOR * adc_media[CURRENT_i] / 4096.0f;
 			pa.gain = get_db_gain(adc_media[GAIN_i]);
 			pa.att = eeprom_1byte_read(ATT_VALUE_ADDR);
-			pa.vswr = max4003_get_dbm(&vswr, adc_media[VSWR_i]);
+			pa.vswr =module_vswr_calc(pa.pout, pa.pr);
 			pa.pin = max4003_get_dbm(&pin, adc_media[PIN_i]);
 			rs485.len = 14;
 			rs485.frame = (uint8_t*) malloc(14);
@@ -215,6 +249,7 @@ int main(void) {
 			break;
 		case SET_ATT_LTEL:
 			pa.att = uart1.rx_buffer[6];
+
 			bda4601_set_att(pa.att, 3);
 			eeprom_write(ATT_VALUE_ADDR, pa.att);
 			sprintf(uart1.tx_buffer, "Attenuation %u\r\n", pa.att);
@@ -222,7 +257,8 @@ int main(void) {
 			uart1_clean_buffer(&uart1);
 			break;
 		case SET_POUT_MAX:
-			ad8363_get_dbm(&pout, adc_media[AD8363_i]);
+
+			pout.max = adc_media[AD8363_i];
 			eeprom_write(POUT_ADC_MAX_ADDR, adc_media[AD8363_i]);
 			HAL_Delay(5);
 			eeprom_1byte_write(POUT_IS_CALIBRATED_ADDR,
@@ -231,7 +267,7 @@ int main(void) {
 			uart1_clean_buffer(&uart1);
 			break;
 		case SET_POUT_MIN:
-			ad8363_get_dbm(&pout, adc_media[AD8363_i]);
+			pout.min = adc_media[AD8363_i];
 			eeprom_write(POUT_ADC_MIN_ADDR, adc_media[AD8363_i]);
 			HAL_Delay(5);
 			eeprom_1byte_write(POUT_IS_CALIBRATED_ADDR,
@@ -240,7 +276,7 @@ int main(void) {
 			uart1_clean_buffer(&uart1);
 			break;
 		case SET_PIN_MAX:
-			max4003_get_dbm(&pin, adc_media[PIN_i]);
+			pa.pin =  adc_media[PIN_i];
 			eeprom_write(PIN_ADC_MAX_ADDR, adc_media[PIN_i]);
 			HAL_Delay(5);
 			eeprom_1byte_write(PIN_IS_CALIBRATED_ADDR,
@@ -249,7 +285,7 @@ int main(void) {
 			uart1_clean_buffer(&uart1);
 			break;
 		case SET_PIN_MIN:
-			max4003_get_dbm(&pin, adc_media[PIN_i]);
+			pa.pin =  adc_media[PIN_i];
 			eeprom_write(PIN_ADC_MIN_ADDR, adc_media[PIN_i]);
 			HAL_Delay(5);
 			eeprom_write(PIN_IS_CALIBRATED_ADDR,
@@ -258,7 +294,7 @@ int main(void) {
 			uart1_clean_buffer(&uart1);
 			break;
 		case SET_VSWR_MAX:
-			max4003_get_dbm(&vswr, adc_media[VSWR_i]);
+			pa.pr =  adc_media[VSWR_i];
 			eeprom_write(VSWR_ADC_MAX_ADDR, adc_media[VSWR_i]);
 			HAL_Delay(5);
 			eeprom_1byte_write(VSWR_IS_CALIBRATED_ADDR,
@@ -267,7 +303,7 @@ int main(void) {
 			uart1_clean_buffer(&uart1);
 			break;
 		case SET_VSWR_MIN:
-			max4003_get_dbm(&vswr, adc_media[VSWR_i]);
+			pa.pr =  adc_media[VSWR_i];
 			eeprom_write(VSWR_ADC_MIN_ADDR, adc_media[VSWR_i]);
 			HAL_Delay(5);
 			eeprom_write(VSWR_IS_CALIBRATED_ADDR,
@@ -292,14 +328,13 @@ int main(void) {
 			uart1_clean_buffer(&uart1);
 			break;
 		case QUERY_PARAMETER_SIGMA:
-
+			pa.pr = max4003_get_dbm(&vswr, adc_media[VSWR_i]);
 			pa.pout = ad8363_get_dbm(&pout, adc_media[AD8363_i]);
 			pa.current = ADC_CURRENT_FACTOR * adc_media[CURRENT_i] / 4096.0f;
 			pa.gain = get_db_gain(adc_media[GAIN_i]);
 			pa.att = eeprom_1byte_read(ATT_VALUE_ADDR);
+			pa.vswr =module_vswr_calc(pa.pout, pa.pr);
 			pa.pin = max4003_get_dbm(&pin, adc_media[PIN_i]);
-			pa.voltage = ADC_VOLTAGE_FACTOR * (float) adc_media[VOLTAGE_i];
-			pa.vswr = max4003_get_dbm(&vswr, adc_media[VSWR_i]);
 			rs485_set_query_frame(&rs485, &pa);
 			uart1_send_frame((char*) rs485.frame, 14);
 			uart1_clean_buffer(&uart1);

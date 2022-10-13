@@ -60,8 +60,8 @@ all: main-build
 main-build: PA_UHF.elf secondary-outputs
 
 # Tool invocations
-PA_UHF.elf PA_UHF.map: $(OBJS) $(USER_OBJS) C:\Users\sigmadev\development\stm32\pa-stm32g030\PA_UHF\STM32G030K6TX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
-	arm-none-eabi-gcc -o "PA_UHF.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m0plus -T"C:\Users\sigmadev\development\stm32\pa-stm32g030\PA_UHF\STM32G030K6TX_FLASH.ld" --specs=nosys.specs -Wl,-Map="PA_UHF.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+PA_UHF.elf PA_UHF.map: $(OBJS) $(USER_OBJS) /Users/arturo/STM32CubeIDE/workspace_1.9.0/pa-stm32g030/PA_UHF/STM32G030K6TX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
+	arm-none-eabi-gcc -o "PA_UHF.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m0plus -T"/Users/arturo/STM32CubeIDE/workspace_1.9.0/pa-stm32g030/PA_UHF/STM32G030K6TX_FLASH.ld" --specs=nosys.specs -Wl,-Map="PA_UHF.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
 	@echo 'Finished building target: $@'
 	@echo ' '
 

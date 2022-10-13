@@ -7,6 +7,7 @@
 
 #include "main.h"
 #include "stdbool.h"
+#include "math.h"
 
 #ifndef INC_LTEL_H_
 #define INC_LTEL_H_
@@ -23,15 +24,18 @@ typedef struct MODULE {
 	uint8_t att;
 	uint8_t gain;
 	int8_t pout;
+	int8_t pr;
 	uint8_t voltage;
-	uint8_t pin;
+	int8_t pin;
 	uint8_t current;
 	bool state;
-	uint8_t temperature;
+	float  temperature;
 	float vswr;
 	Id_t id;
 	Function_t function;
 }  Module_t;
+
+
 
 static const uint8_t MODULE_ADDR = 0x08;
 static const uint8_t MODULE_FUNCTION = 0x09;
@@ -41,6 +45,7 @@ static const uint8_t LTEL_END_MARK = 0x7f;
 
 void  module_init(Module_t*,Function_t,Id_t);
 void module_calc_parameters(Module_t m,uint16_t* media_array);
+float module_vswr_calc(int8_t pf, int8_t pr);
 
 
 #endif /* INC_LTEL_H_ */

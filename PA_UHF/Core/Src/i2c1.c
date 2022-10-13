@@ -86,7 +86,7 @@ char i2c1_byteReceive(char saddr, uint8_t N) {
 	return data;
 }
 
-void  i2c1_buffReceive(char saddr, char *rcv,  uint8_t N) {
+void  i2c1_buffReceive(char saddr, uint8_t *rcv,  uint8_t N) {
 	uint32_t counter = HAL_GetTick();
 	bool timeout = false;
 	i2c1_start(saddr, READ, N);
