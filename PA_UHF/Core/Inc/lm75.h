@@ -30,5 +30,4 @@ typedef enum LM75_REG {
 void lm75_init();
 float lm75_read(void) ;
 
-
 #endif /* __LM75_H */
