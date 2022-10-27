@@ -1,5 +1,5 @@
 /*
- * bda4601.c
+eeprom.c * bda4601.c
  *
  *  Created on: Sep 26, 2022
  *      Author: sigmadev
@@ -60,13 +60,13 @@ void bda4601_set_initial_att(uint8_t value, uint16_t period_millis) {
 	uint8_t times = period_millis / t_step;
 
 	int att_step = value / times;
+	int att = 0;
 
 	for (int i = 0; i <= times; i++) {
-		bda4601_set_att(att_step, 2);
-		att_step += att_step;
-		if (att_step >= MAX_DB_VALUE) {
-			att_step > MAX_DB_VALUE;
-			break;
+		bda4601_set_att(att, 2);
+		att += att_step;
+		if (att >= MAX_DB_VALUE) {
+			return;
 		}
 		HAL_Delay(t_step);
 	}

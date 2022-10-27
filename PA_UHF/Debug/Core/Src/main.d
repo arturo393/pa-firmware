@@ -37,7 +37,7 @@ Core/Src/main.o: ../Core/Src/main.c ../Core/Inc/main.h \
  ../Core/Inc/i2c1.h ../Core/Inc/utils.h ../Core/Inc/i2c1.h \
  ../Core/Inc/bda4601.h ../Core/Inc/led.h ../Core/Inc/module.h \
  ../Core/Inc/rs485.h ../Core/Inc/module.h ../Core/Inc/ad8363.h \
- ../Core/Inc/max4003.h ../Core/Inc/adc.h
+ ../Core/Inc/max4003.h ../Core/Inc/adc.h ../Core/Inc/lm75.h
 ../Core/Inc/main.h:
 ../Drivers/STM32G0xx_HAL_Driver/Inc/stm32g0xx_hal.h:
 ../Core/Inc/stm32g0xx_hal_conf.h:
@@ -87,3 +87,4 @@ Core/Src/main.o: ../Core/Src/main.c ../Core/Inc/main.h \
 ../Core/Inc/ad8363.h:
 ../Core/Inc/max4003.h:
 ../Core/Inc/adc.h:
+../Core/Inc/lm75.h:

@@ -11,6 +11,7 @@ C_SRCS += \
 ../Core/Src/eeprom.c \
 ../Core/Src/i2c1.c \
 ../Core/Src/led.c \
+../Core/Src/lm75.c \
 ../Core/Src/main.c \
 ../Core/Src/max4003.c \
 ../Core/Src/module.c \
@@ -30,6 +31,7 @@ OBJS += \
 ./Core/Src/eeprom.o \
 ./Core/Src/i2c1.o \
 ./Core/Src/led.o \
+./Core/Src/lm75.o \
 ./Core/Src/main.o \
 ./Core/Src/max4003.o \
 ./Core/Src/module.o \
@@ -49,6 +51,7 @@ C_DEPS += \
 ./Core/Src/eeprom.d \
 ./Core/Src/i2c1.d \
 ./Core/Src/led.d \
+./Core/Src/lm75.d \
 ./Core/Src/main.d \
 ./Core/Src/max4003.d \
 ./Core/Src/module.d \
@@ -69,7 +72,7 @@ Core/Src/%.o Core/Src/%.su: ../Core/Src/%.c Core/Src/subdir.mk
 clean: clean-Core-2f-Src
 
 clean-Core-2f-Src:
-	-$(RM) ./Core/Src/ad8363.d ./Core/Src/ad8363.o ./Core/Src/ad8363.su ./Core/Src/adc.d ./Core/Src/adc.o ./Core/Src/adc.su ./Core/Src/bda4601.d ./Core/Src/bda4601.o ./Core/Src/bda4601.su ./Core/Src/eeprom.d ./Core/Src/eeprom.o ./Core/Src/eeprom.su ./Core/Src/i2c1.d ./Core/Src/i2c1.o ./Core/Src/i2c1.su ./Core/Src/led.d ./Core/Src/led.o ./Core/Src/led.su ./Core/Src/main.d ./Core/Src/main.o ./Core/Src/main.su ./Core/Src/max4003.d ./Core/Src/max4003.o ./Core/Src/max4003.su ./Core/Src/module.d ./Core/Src/module.o ./Core/Src/module.su ./Core/Src/rs485.d ./Core/Src/rs485.o ./Core/Src/rs485.su ./Core/Src/stm32g0xx_hal_msp.d ./Core/Src/stm32g0xx_hal_msp.o ./Core/Src/stm32g0xx_hal_msp.su ./Core/Src/stm32g0xx_it.d ./Core/Src/stm32g0xx_it.o ./Core/Src/stm32g0xx_it.su ./Core/Src/syscalls.d ./Core/Src/syscalls.o ./Core/Src/syscalls.su ./Core/Src/sysmem.d ./Core/Src/sysmem.o ./Core/Src/sysmem.su ./Core/Src/system_stm32g0xx.d ./Core/Src/system_stm32g0xx.o ./Core/Src/system_stm32g0xx.su ./Core/Src/uart1.d ./Core/Src/uart1.o ./Core/Src/uart1.su ./Core/Src/utils.d ./Core/Src/utils.o ./Core/Src/utils.su
+	-$(RM) ./Core/Src/ad8363.d ./Core/Src/ad8363.o ./Core/Src/ad8363.su ./Core/Src/adc.d ./Core/Src/adc.o ./Core/Src/adc.su ./Core/Src/bda4601.d ./Core/Src/bda4601.o ./Core/Src/bda4601.su ./Core/Src/eeprom.d ./Core/Src/eeprom.o ./Core/Src/eeprom.su ./Core/Src/i2c1.d ./Core/Src/i2c1.o ./Core/Src/i2c1.su ./Core/Src/led.d ./Core/Src/led.o ./Core/Src/led.su ./Core/Src/lm75.d ./Core/Src/lm75.o ./Core/Src/lm75.su ./Core/Src/main.d ./Core/Src/main.o ./Core/Src/main.su ./Core/Src/max4003.d ./Core/Src/max4003.o ./Core/Src/max4003.su ./Core/Src/module.d ./Core/Src/module.o ./Core/Src/module.su ./Core/Src/rs485.d ./Core/Src/rs485.o ./Core/Src/rs485.su ./Core/Src/stm32g0xx_hal_msp.d ./Core/Src/stm32g0xx_hal_msp.o ./Core/Src/stm32g0xx_hal_msp.su ./Core/Src/stm32g0xx_it.d ./Core/Src/stm32g0xx_it.o ./Core/Src/stm32g0xx_it.su ./Core/Src/syscalls.d ./Core/Src/syscalls.o ./Core/Src/syscalls.su ./Core/Src/sysmem.d ./Core/Src/sysmem.o ./Core/Src/sysmem.su ./Core/Src/system_stm32g0xx.d ./Core/Src/system_stm32g0xx.o ./Core/Src/system_stm32g0xx.su ./Core/Src/uart1.d ./Core/Src/uart1.o ./Core/Src/uart1.su ./Core/Src/utils.d ./Core/Src/utils.o ./Core/Src/utils.su
 
 .PHONY: clean-Core-2f-Src
 

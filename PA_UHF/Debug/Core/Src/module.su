@@ -1,1 +1,2 @@
 ../Core/Src/module.c:10:7:module_init	16	static
+../Core/Src/module.c:21:7:module_vswr_calc	40	static
