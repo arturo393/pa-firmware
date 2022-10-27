@@ -48,18 +48,11 @@ void i2c1_init() {
 	/* i2c disable */
 	CLEAR_BIT(I2C1->CR1, I2C_CR1_PE);
 
-	// TODO revisar porque funciona
-	//	ATOMIC_MODIFY_REG(I2C1->TIMINGR, I2C_TIMINGR_PRESC, 1);
-// 	ATOMIC_MODIFY_REG(I2C1->TIMINGR, I2C_TIMINGR_SCLDEL, 0x7);
-// 	ATOMIC_MODIFY_REG(I2C1->TIMINGR, I2C_TIMINGR_SDADEL, 0x0);
-// 	ATOMIC_MODIFY_REG(I2C1->TIMINGR, I2C_TIMINGR_SCLH, 0x7D);
-// 	ATOMIC_MODIFY_REG(I2C1->TIMINGR, I2C_TIMINGR_SCLL, 0xBC);
-
-	MODIFY_REG(I2C1->TIMINGR, 0X10111111U, 0X10707DBCU);
+	I2C1->TIMINGR = 0X10707DBCU;
 
 	/*i2c Rx interrupt enable */
-	SET_BIT(I2C1->CR1, I2C_CR1_RXIE);
-	SET_BIT(I2C1->CR1, I2C_CR1_TXIE);
+//SET_BIT(I2C1->CR1, I2C_CR1_RXIE);
+//SET_BIT(I2C1->CR1, I2C_CR1_TXIE);
 
 	/* i2c enable */
 	SET_BIT(I2C1->CR1, I2C_CR1_PE);
@@ -70,6 +63,10 @@ char i2c1_byteReceive(char saddr, uint8_t N) {
 	bool timeout = false;
 	i2c1_start(saddr, READ, N);
 
+	while (!READ_BIT(I2C1->ISR, I2C_ISR_STOPF)) {
+	}
+	SET_BIT(I2C1->ICR, I2C_ICR_STOPCF);
+
 	char data = 0;
 	for (int i = 0; i < N; i++) {
 		while (!READ_BIT(I2C1->ISR, I2C_ISR_RXNE) & !timeout) {
@@ -77,25 +74,25 @@ char i2c1_byteReceive(char saddr, uint8_t N) {
 				return 0x00;
 		}
 		data = READ_REG(I2C1->RXDR);
-
 	}
-	while (!(READ_BIT(I2C1->ISR, I2C_ISR_STOPF))) {
-	}
-	SET_BIT(I2C1->ICR, I2C_ICR_STOPCF);
-
+//	while (!(READ_BIT(I2C1->ISR, I2C_ISR_TC))) {
+//	}
 	return data;
 }
 
-void  i2c1_buffReceive(char saddr, char *rcv,  uint8_t N) {
+void i2c1_buffReceive(char saddr, uint8_t *rcv, uint8_t N) {
 	uint32_t counter = HAL_GetTick();
 	bool timeout = false;
 	i2c1_start(saddr, READ, N);
 
+
 	char data = 0;
 	for (int i = 0; i < N; i++) {
 		while (!READ_BIT(I2C1->ISR, I2C_ISR_RXNE) & !timeout) {
-			if (HAL_GetTick() - counter > 500)
+			if (HAL_GetTick() - counter > 500){
+				SET_BIT(I2C1->ICR, I2C_ICR_STOPCF);
 				return 0x00;
+			}
 		}
 		rcv[i] = READ_REG(I2C1->RXDR);
 
@@ -116,6 +113,43 @@ void i2c1_byteTransmit(char saddr, uint8_t *data, uint8_t N) {
 			if (HAL_GetTick() - counter > 500)
 				return;
 		}
+		I2C1->TXDR = data[i];
+	}
+
+	while (!READ_BIT(I2C1->ISR, I2C_ISR_STOPF)) {
+	}
+	SET_BIT(I2C1->ICR, I2C_ICR_STOPCF);
+
+}
+
+char i2c1_byteReceive_old(char saddr, uint8_t N) {
+
+	i2c1_start(saddr, READ, N);
+
+	char data = 0;
+	for (int i = 0; i < N; i++) {
+		while (!READ_BIT(I2C1->ISR, I2C_ISR_RXNE)
+				& !READ_BIT(I2C1->ISR, I2C_ISR_NACKF)) {
+		}
+		data = READ_REG(I2C1->RXDR);
+
+	}
+	while (!(READ_BIT(I2C1->ISR, I2C_ISR_STOPF)
+			| READ_BIT(I2C1->ISR, I2C_ISR_NACKF))) {
+	}
+	SET_BIT(I2C1->ISR, I2C_ICR_STOPCF);
+	SET_BIT(I2C1->ISR, I2C_ICR_NACKCF);
+
+	return data;
+}
+
+void i2c1_byteTransmit_old(char saddr, char *data, uint8_t N) {
+	i2c1_start(saddr, WRITE, N);
+
+	for (int i = 0; i < N; i++) {
+		while (!READ_BIT(I2C1->ISR, I2C_ISR_TXIS)
+				& !READ_BIT(I2C1->ISR, I2C_ISR_NACKF)) {
+		}
 		MODIFY_REG(I2C1->TXDR, I2C_TXDR_TXDATA, data[i]);
 	}
 
@@ -124,6 +158,7 @@ void i2c1_byteTransmit(char saddr, uint8_t *data, uint8_t N) {
 	SET_BIT(I2C1->ISR, I2C_ICR_STOPCF);
 
 }
+
 
 void i2c1_start(char saddr, uint8_t transfer_request, uint8_t N) {
 	/*master 7 bit addressing mode */
@@ -135,6 +170,7 @@ void i2c1_start(char saddr, uint8_t transfer_request, uint8_t N) {
 	/* stops when NBytes are transferred */
 	SET_BIT(I2C1->CR2, I2C_CR2_AUTOEND);
 	/* set START condition  automatically changes to master */
+
 
 	if (transfer_request == 1) {
 		/* request a read transfer */
@@ -153,10 +189,9 @@ void i2c1_scanner(uint8_t *addr) {
 	uint8_t j = 0;
 	bool timeout = false;
 
-	for (int i = 1; i < 128; i++) {
-		i2c1_start(i << 1 | 1, READ, 1);
+	for (uint8_t i = 1; i < 128; i++) {
+		i2c1_start(i  << 1 , READ, 1);
 		timeout = false;
-
 		while (!READ_BIT(I2C1->ISR, I2C_ISR_RXNE) & !timeout) {
 
 			if (HAL_GetTick() - counter > 500) {

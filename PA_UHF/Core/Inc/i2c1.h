@@ -19,7 +19,9 @@ void i2c1_init();
 void  i2c1_start(char,uint8_t,uint8_t);
 char i2c1_byteReceive(char ,uint8_t);
 void i2c1_byteTransmit(char,uint8_t*,uint8_t);
+char i2c1_byteReceive_old(char ,uint8_t);
+void i2c1_byteTransmit_old(char,char*,uint8_t);
 void  i2c1_scanner(uint8_t *addr);
-void  i2c1_buffReceive(char saddr, char *rcv,  uint8_t N);
+void  i2c1_buffReceive(char saddr, uint8_t *rcv,  uint8_t N);
 
 #endif /* INC_I2C1_H_ */
