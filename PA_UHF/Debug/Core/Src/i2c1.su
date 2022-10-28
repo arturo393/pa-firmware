@@ -1,8 +1,8 @@
 ../Core/Src/i2c1.c:10:6:i2c1_init	8	static
-../Core/Src/i2c1.c:61:6:i2c1_byteReceive	32	static
+../Core/Src/i2c1.c:61:6:i2c1_byte_rx	32	static
 ../Core/Src/i2c1.c:83:6:i2c1_buffReceive	32	static
-../Core/Src/i2c1.c:106:6:i2c1_byteTransmit	24	static
-../Core/Src/i2c1.c:125:6:i2c1_byteReceive_old	24	static
-../Core/Src/i2c1.c:146:6:i2c1_byteTransmit_old	24	static
-../Core/Src/i2c1.c:163:6:i2c1_start	24	static
-../Core/Src/i2c1.c:187:6:i2c1_scanner	32	static
+../Core/Src/i2c1.c:105:6:i2c1_byte_tx	24	static
+../Core/Src/i2c1.c:124:6:i2c1_byteReceive_old	24	static
+../Core/Src/i2c1.c:145:6:i2c1_byteTransmit_old	24	static
+../Core/Src/i2c1.c:162:6:i2c1_start	24	static
+../Core/Src/i2c1.c:186:6:i2c1_scanner	32	static

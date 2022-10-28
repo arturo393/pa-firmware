@@ -7,10 +7,11 @@
 #include "max4003.h"
 
 uint8_t max4003_get_dbm( MAX4003_t *mx,uint16_t value) {
-
-	float m = (float) ( MAX4003_DBM_MAX -  MAX4003_DBM_MIN)
+	float m;
+	float b;
+	 m = (float) ( MAX4003_DBM_MAX -  MAX4003_DBM_MIN)
 			/ (float) (mx->max - mx->min);
-	float b =  MAX4003_DBM_MAX -mx->max * m;
+	 b =  MAX4003_DBM_MAX -mx->max * m;
 
 	if (value > mx->max) {
 		return  MAX4003_DBM_MAX;

@@ -55,10 +55,8 @@ void bda4601_set_att(uint8_t val, uint8_t times) {
 }
 
 void bda4601_set_initial_att(uint8_t value, uint16_t period_millis) {
-
 	uint8_t t_step = 500;
 	uint8_t times = period_millis / t_step;
-
 	int att_step = value / times;
 	int att = 0;
 

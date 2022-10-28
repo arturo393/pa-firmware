@@ -17,7 +17,6 @@
  */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
-#include <m24c64.h>
 #include "main.h"
 
 /* Private includes ----------------------------------------------------------*/
@@ -39,6 +38,7 @@
 #include "max4003.h"
 #include "adc.h"
 #include "lm75.h"
+#include <m24c64.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -110,32 +110,33 @@ uint8_t get_db_gain(uint16_t adc_gain);
 uint8_t get_dbm_pout(uint16_t pout_adc);
 
 AD8363_t set_pout_max_min_adc_values(AD8363_t pout) {
-	if (m24c64_1byte_read(POUT_IS_CALIBRATED_ADDR) != AD8363_IS_CALIBRATED) {
-		m24c64_write(POUT_ADC_MIN_ADDR, AD8363_ADC_MIN);
-		m24c64_write(POUT_ADC_MAX_ADDR, AD8363_ADC_MAX);
+	if (read_byte(POUT_IS_CALIBRATED_ADDR) != AD8363_IS_CALIBRATED) {
+		store_2byte(POUT_ADC_MIN_ADDR_0, AD8363_ADC_MIN);
+		store_2byte(POUT_ADC_MAX_ADDR_0, AD8363_ADC_MAX);
 	}
-	pout.max = m24c64_read(POUT_ADC_MAX_ADDR);
-	pout.min = m24c64_read(POUT_ADC_MIN_ADDR);
+	pout.min = read_2byte(POUT_ADC_MIN_ADDR_0);
+	pout.max = read_2byte(POUT_ADC_MAX_ADDR_0);
+
 	return pout;
 }
 
 MAX4003_t set_pin_max_min_adc_values(MAX4003_t pin) {
-	if (m24c64_1byte_read(PIN_IS_CALIBRATED_ADDR) != MAX4003_IS_CALIBRATED) {
-		m24c64_write(PIN_ADC_MIN_ADDR, MAX4003_ADC_MIN);
-		m24c64_write(PIN_ADC_MAX_ADDR, MAX4003_ADC_MAX);
+	if (read_byte(PIN_IS_CALIBRATED_ADDR) != MAX4003_IS_CALIBRATED) {
+		store_2byte(PIN_ADC_MIN_ADDR_0, MAX4003_ADC_MIN);
+		store_2byte(PIN_ADC_MAX_ADDR_0, MAX4003_ADC_MAX);
 	}
-	pin.max = m24c64_read(PIN_ADC_MAX_ADDR);
-	pin.min = m24c64_read(PIN_ADC_MIN_ADDR);
+	pin.max = read_2byte(PIN_ADC_MAX_ADDR_0);
+	pin.min = read_2byte(PIN_ADC_MIN_ADDR_0);
 	return pin;
 }
 
 MAX4003_t set_max_min_vswr_adc_values(MAX4003_t vswr) {
-	if (m24c64_1byte_read(VSWR_IS_CALIBRATED_ADDR) != MAX4003_IS_CALIBRATED) {
-		m24c64_write(VSWR_ADC_MIN_ADDR, MAX4003_ADC_MIN);
-		m24c64_write(VSWR_ADC_MAX_ADDR, MAX4003_ADC_MAX);
+	if (read_byte(VSWR_IS_CALIBRATED_ADDR) != MAX4003_IS_CALIBRATED) {
+		store_2byte(VSWR_ADC_MIN_ADDR_0, MAX4003_ADC_MIN);
+		store_2byte(VSWR_ADC_MAX_ADDR_0, MAX4003_ADC_MAX);
 	}
-	vswr.max = m24c64_read(VSWR_ADC_MAX_ADDR);
-	vswr.min = m24c64_read(VSWR_ADC_MIN_ADDR);
+	vswr.max = read_2byte(VSWR_ADC_MAX_ADDR_0);
+	vswr.min = read_2byte(VSWR_ADC_MIN_ADDR_0);
 	return vswr;
 }
 
@@ -163,6 +164,13 @@ int main(void)
 	MAX4003_t vswr;
 	LED_t led;
 	uint8_t att;
+	uint8_t i = 0, ret;
+	M24C64_t  eeprom;
+	//uint8_t Buffer[25] = {0};
+	uint8_t Space[] = " - ";
+	uint8_t StartMSG[] = "Starting I2C Scanning: \r\n";
+	uint8_t EndMSG[] = "Done! \r\n\r\n";
+
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -199,26 +207,31 @@ int main(void)
   MX_DMA_Init();
   MX_ADC1_Init();
   MX_USART1_UART_Init();
- // MX_IWDG_Init();
+//  MX_IWDG_Init();
   /* USER CODE BEGIN 2 */
 
 // Calibrate The ADC On Power-Up For Better Accuracy
 	HAL_ADCEx_Calibration_Start(&hadc1);
 	uart1_send_str("LNA init\n\r");
-//	uint8_t addrs[5] = {0};  // 0x50 0x60 0x4f
+uint8_t addrs[5] = {0};  // 0x50 0x60 0x4f
 //	i2c1_scanner(addrs);
 
-	m24c64_1byte_write(ATT_VALUE_ADDR, 5);
-	att = m24c64_1byte_read(ATT_VALUE_ADDR);
 
+
+
+	store_byte(ATT_VALUE_ADDR,5);
+	att = read_byte(ATT_VALUE_ADDR);
+
+	/*
 	if (att > 0 && att < 30)
 		bda4601_set_initial_att(att, STARTING_MILLIS);
 	else
 		bda4601_set_att(0, 3);
-
+*/
 	pout = set_pout_max_min_adc_values(pout);
 	pin = set_pin_max_min_adc_values(pin);
 	vswr = set_max_min_vswr_adc_values(vswr);
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -231,7 +244,7 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-
+/*
 		HAL_Delay(1000);
 
 		pa.temperature = lm75_read();
@@ -239,7 +252,7 @@ int main(void)
 		pa.pout = ad8363_get_dbm(&pout, adc_media[AD8363_i]);
 		pa.current = ADC_CURRENT_FACTOR * adc_media[CURRENT_i] / 4096.0f;
 		pa.gain = get_db_gain(adc_media[GAIN_i]);
-		pa.att = m24c64_1byte_read(ATT_VALUE_ADDR);
+		pa.att = read_byte(ATT_VALUE_ADDR);
 		pa.vswr =module_vswr_calc(pa.pout, pa.pr);
 		pa.pin = max4003_get_dbm(&pin, adc_media[PIN_i]);
 
@@ -250,7 +263,7 @@ int main(void)
 			pa.pout = ad8363_get_dbm(&pout, adc_media[AD8363_i]);
 			pa.current = ADC_CURRENT_FACTOR * adc_media[CURRENT_i] / 4096.0f;
 			pa.gain = get_db_gain(adc_media[GAIN_i]);
-			pa.att = m24c64_1byte_read(ATT_VALUE_ADDR);
+			pa.att = read_byte(ATT_VALUE_ADDR);
 			pa.vswr =module_vswr_calc(pa.pout, pa.pr);
 			pa.pin = max4003_get_dbm(&pin, adc_media[PIN_i]);
 			rs485.len = 14;
@@ -344,7 +357,7 @@ int main(void)
 			pa.pout = ad8363_get_dbm(&pout, adc_media[AD8363_i]);
 			pa.current = ADC_CURRENT_FACTOR * adc_media[CURRENT_i] / 4096.0f;
 			pa.gain = get_db_gain(adc_media[GAIN_i]);
-			pa.att = m24c64_1byte_read(ATT_VALUE_ADDR);
+			pa.att = read_byte(ATT_VALUE_ADDR);
 			pa.vswr =module_vswr_calc(pa.pout, pa.pr);
 			pa.pin = max4003_get_dbm(&pin, adc_media[PIN_i]);
 			rs485_set_query_frame(&rs485, &pa);
@@ -357,7 +370,7 @@ int main(void)
 		}
 
 		led_enable_kalive(led.sysrp_counter);
-
+*/
 		//HAL_IWDG_Refresh(&hiwdg);
 	}   //Fin while
   /* USER CODE END 3 */
