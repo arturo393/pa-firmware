@@ -17,6 +17,7 @@
  */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
+#include <m24c64.h>
 #include "main.h"
 
 /* Private includes ----------------------------------------------------------*/
@@ -26,7 +27,6 @@
 #include <string.h>
 #include <uart1.h>
 #include <math.h>
-#include "eeprom.h"
 #include "utils.h"
 #include "i2c1.h"
 #include "stdbool.h"
@@ -85,14 +85,6 @@ typedef enum ADC_INDEX {
 static const float ADC_CURRENT_FACTOR = 298.1818182f;
 static const float ADC_VOLTAGE_FACTOR = 0.007404330f;
 
-UART1_t uart1;
-Module_t pa;
-RS485_t rs485;
-AD8363_t pout;
-MAX4003_t pin;
-MAX4003_t vswr;
-LED_t led;
-
 volatile uint16_t adcResultsDMA[ADC_CHANNEL_NUM];
 uint16_t adc_values[ADC_CHANNEL_NUM][MEDIA_NUM];
 uint16_t adc_media[ADC_CHANNEL_NUM];
@@ -117,6 +109,36 @@ static void MX_IWDG_Init(void);
 uint8_t get_db_gain(uint16_t adc_gain);
 uint8_t get_dbm_pout(uint16_t pout_adc);
 
+AD8363_t set_pout_max_min_adc_values(AD8363_t pout) {
+	if (m24c64_1byte_read(POUT_IS_CALIBRATED_ADDR) != AD8363_IS_CALIBRATED) {
+		m24c64_write(POUT_ADC_MIN_ADDR, AD8363_ADC_MIN);
+		m24c64_write(POUT_ADC_MAX_ADDR, AD8363_ADC_MAX);
+	}
+	pout.max = m24c64_read(POUT_ADC_MAX_ADDR);
+	pout.min = m24c64_read(POUT_ADC_MIN_ADDR);
+	return pout;
+}
+
+MAX4003_t set_pin_max_min_adc_values(MAX4003_t pin) {
+	if (m24c64_1byte_read(PIN_IS_CALIBRATED_ADDR) != MAX4003_IS_CALIBRATED) {
+		m24c64_write(PIN_ADC_MIN_ADDR, MAX4003_ADC_MIN);
+		m24c64_write(PIN_ADC_MAX_ADDR, MAX4003_ADC_MAX);
+	}
+	pin.max = m24c64_read(PIN_ADC_MAX_ADDR);
+	pin.min = m24c64_read(PIN_ADC_MIN_ADDR);
+	return pin;
+}
+
+MAX4003_t set_max_min_vswr_adc_values(MAX4003_t vswr) {
+	if (m24c64_1byte_read(VSWR_IS_CALIBRATED_ADDR) != MAX4003_IS_CALIBRATED) {
+		m24c64_write(VSWR_ADC_MIN_ADDR, MAX4003_ADC_MIN);
+		m24c64_write(VSWR_ADC_MAX_ADDR, MAX4003_ADC_MAX);
+	}
+	vswr.max = m24c64_read(VSWR_ADC_MAX_ADDR);
+	vswr.min = m24c64_read(VSWR_ADC_MIN_ADDR);
+	return vswr;
+}
+
 //void uart_reset_reading(UART_HandleTypeDef *huart);
 /* USER CODE END PFP */
 
@@ -133,6 +155,14 @@ int main(void)
 {
   /* USER CODE BEGIN 1 */
 	//__disable_irq();
+	UART1_t uart1;
+	Module_t pa;
+	RS485_t rs485;
+	AD8363_t pout;
+	MAX4003_t pin;
+	MAX4003_t vswr;
+	LED_t led;
+	uint8_t att;
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -178,36 +208,17 @@ int main(void)
 //	uint8_t addrs[5] = {0};  // 0x50 0x60 0x4f
 //	i2c1_scanner(addrs);
 
-	eeprom_1byte_write(ATT_VALUE_ADDR, 5);
-	uint8_t attenuation = eeprom_1byte_read(ATT_VALUE_ADDR);
-	if (attenuation > 0 && attenuation < 30)
-		bda4601_set_initial_att(attenuation, STARTING_MILLIS);
+	m24c64_1byte_write(ATT_VALUE_ADDR, 5);
+	att = m24c64_1byte_read(ATT_VALUE_ADDR);
+
+	if (att > 0 && att < 30)
+		bda4601_set_initial_att(att, STARTING_MILLIS);
 	else
 		bda4601_set_att(0, 3);
 
-	if (eeprom_1byte_read(POUT_IS_CALIBRATED_ADDR) != AD8363_IS_CALIBRATED) {
-		eeprom_write(POUT_ADC_MIN_ADDR, AD8363_ADC_MIN);
-		eeprom_write(POUT_ADC_MAX_ADDR, AD8363_ADC_MAX);
-	}
-	if (eeprom_1byte_read(PIN_IS_CALIBRATED_ADDR) != MAX4003_IS_CALIBRATED) {
-		eeprom_write(PIN_ADC_MIN_ADDR, MAX4003_ADC_MIN);
-		eeprom_write(PIN_ADC_MAX_ADDR, MAX4003_ADC_MAX);
-	}
-	if (eeprom_1byte_read(VSWR_IS_CALIBRATED_ADDR) != MAX4003_IS_CALIBRATED) {
-		eeprom_write(VSWR_ADC_MIN_ADDR, MAX4003_ADC_MIN);
-		eeprom_write(VSWR_ADC_MAX_ADDR, MAX4003_ADC_MAX);
-	}
-
-	pin.max = eeprom_read(PIN_ADC_MAX_ADDR);
-	pin.min = eeprom_read(PIN_ADC_MIN_ADDR);
-	pout.max = eeprom_read(POUT_ADC_MAX_ADDR);
-	pout.min = eeprom_read(POUT_ADC_MIN_ADDR);
-	vswr.max = eeprom_read(VSWR_ADC_MAX_ADDR);
-	vswr.min = eeprom_read(VSWR_ADC_MIN_ADDR);
-
-
-
-
+	pout = set_pout_max_min_adc_values(pout);
+	pin = set_pin_max_min_adc_values(pin);
+	vswr = set_max_min_vswr_adc_values(vswr);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -222,13 +233,13 @@ int main(void)
     /* USER CODE BEGIN 3 */
 
 		HAL_Delay(1000);
-		pa.temperature = lm75_read();
 
+		pa.temperature = lm75_read();
 		pa.pr = max4003_get_dbm(&vswr, adc_media[VSWR_i]);
 		pa.pout = ad8363_get_dbm(&pout, adc_media[AD8363_i]);
 		pa.current = ADC_CURRENT_FACTOR * adc_media[CURRENT_i] / 4096.0f;
 		pa.gain = get_db_gain(adc_media[GAIN_i]);
-		pa.att = eeprom_1byte_read(ATT_VALUE_ADDR);
+		pa.att = m24c64_1byte_read(ATT_VALUE_ADDR);
 		pa.vswr =module_vswr_calc(pa.pout, pa.pr);
 		pa.pin = max4003_get_dbm(&pin, adc_media[PIN_i]);
 
@@ -239,7 +250,7 @@ int main(void)
 			pa.pout = ad8363_get_dbm(&pout, adc_media[AD8363_i]);
 			pa.current = ADC_CURRENT_FACTOR * adc_media[CURRENT_i] / 4096.0f;
 			pa.gain = get_db_gain(adc_media[GAIN_i]);
-			pa.att = eeprom_1byte_read(ATT_VALUE_ADDR);
+			pa.att = m24c64_1byte_read(ATT_VALUE_ADDR);
 			pa.vswr =module_vswr_calc(pa.pout, pa.pr);
 			pa.pin = max4003_get_dbm(&pin, adc_media[PIN_i]);
 			rs485.len = 14;
@@ -251,9 +262,8 @@ int main(void)
 			break;
 		case SET_ATT_LTEL:
 			pa.att = uart1.rx_buffer[6];
-
 			bda4601_set_att(pa.att, 3);
-			eeprom_write(ATT_VALUE_ADDR, pa.att);
+			m24c64_write(ATT_VALUE_ADDR, pa.att);
 //			sprintf(uart1.tx_buffer, "Attenuation %u\r\n", pa.att);
 			uart1_send_frame((char*) uart1.tx_buffer, TX_BUFFLEN);
 			uart1_clean_buffer(&uart1);
@@ -261,54 +271,54 @@ int main(void)
 		case SET_POUT_MAX:
 
 			pout.max = adc_media[AD8363_i];
-			eeprom_write(POUT_ADC_MAX_ADDR, adc_media[AD8363_i]);
+			m24c64_write(POUT_ADC_MAX_ADDR, adc_media[AD8363_i]);
 			HAL_Delay(5);
-			eeprom_1byte_write(POUT_IS_CALIBRATED_ADDR,
+			m24c64_1byte_write(POUT_IS_CALIBRATED_ADDR,
 					AD8363_IS_CALIBRATED);
 			uart1_send_str("Saved Pout max value\n\r");
 			uart1_clean_buffer(&uart1);
 			break;
 		case SET_POUT_MIN:
 			pout.min = adc_media[AD8363_i];
-			eeprom_write(POUT_ADC_MIN_ADDR, adc_media[AD8363_i]);
+			m24c64_write(POUT_ADC_MIN_ADDR, adc_media[AD8363_i]);
 			HAL_Delay(5);
-			eeprom_1byte_write(POUT_IS_CALIBRATED_ADDR,
+			m24c64_1byte_write(POUT_IS_CALIBRATED_ADDR,
 					AD8363_IS_CALIBRATED);
 //			uart1_send_str("Saved Pout min value\n\r");
 			uart1_clean_buffer(&uart1);
 			break;
 		case SET_PIN_MAX:
 			pa.pin =  adc_media[PIN_i];
-			eeprom_write(PIN_ADC_MAX_ADDR, adc_media[PIN_i]);
+			m24c64_write(PIN_ADC_MAX_ADDR, adc_media[PIN_i]);
 			HAL_Delay(5);
-			eeprom_1byte_write(PIN_IS_CALIBRATED_ADDR,
+			m24c64_1byte_write(PIN_IS_CALIBRATED_ADDR,
 					MAX4003_IS_CALIBRATED);
 //			uart1_send_str("Saved Pin max value\n\r");
 			uart1_clean_buffer(&uart1);
 			break;
 		case SET_PIN_MIN:
 			pa.pin =  adc_media[PIN_i];
-			eeprom_write(PIN_ADC_MIN_ADDR, adc_media[PIN_i]);
+			m24c64_write(PIN_ADC_MIN_ADDR, adc_media[PIN_i]);
 			HAL_Delay(5);
-			eeprom_write(PIN_IS_CALIBRATED_ADDR,
+			m24c64_write(PIN_IS_CALIBRATED_ADDR,
 					MAX4003_IS_CALIBRATED);
 //			uart1_send_str("Saved Pin min value\n\r");
 			uart1_clean_buffer(&uart1);
 			break;
 		case SET_VSWR_MAX:
 			pa.pr =  adc_media[VSWR_i];
-			eeprom_write(VSWR_ADC_MAX_ADDR, adc_media[VSWR_i]);
+			m24c64_write(VSWR_ADC_MAX_ADDR, adc_media[VSWR_i]);
 			HAL_Delay(5);
-			eeprom_1byte_write(VSWR_IS_CALIBRATED_ADDR,
+			m24c64_1byte_write(VSWR_IS_CALIBRATED_ADDR,
 					MAX4003_IS_CALIBRATED);
 //			uart1_send_str("Saved VSWR max value\n\r");
 			uart1_clean_buffer(&uart1);
 			break;
 		case SET_VSWR_MIN:
 			pa.pr =  adc_media[VSWR_i];
-			eeprom_write(VSWR_ADC_MIN_ADDR, adc_media[VSWR_i]);
+			m24c64_write(VSWR_ADC_MIN_ADDR, adc_media[VSWR_i]);
 			HAL_Delay(5);
-			eeprom_write(VSWR_IS_CALIBRATED_ADDR,
+			m24c64_write(VSWR_IS_CALIBRATED_ADDR,
 					MAX4003_IS_CALIBRATED);
 			uart1_send_str("Saved Pout min value\n\r");
 			uart1_clean_buffer(&uart1);
@@ -334,7 +344,7 @@ int main(void)
 			pa.pout = ad8363_get_dbm(&pout, adc_media[AD8363_i]);
 			pa.current = ADC_CURRENT_FACTOR * adc_media[CURRENT_i] / 4096.0f;
 			pa.gain = get_db_gain(adc_media[GAIN_i]);
-			pa.att = eeprom_1byte_read(ATT_VALUE_ADDR);
+			pa.att = m24c64_1byte_read(ATT_VALUE_ADDR);
 			pa.vswr =module_vswr_calc(pa.pout, pa.pr);
 			pa.pin = max4003_get_dbm(&pin, adc_media[PIN_i]);
 			rs485_set_query_frame(&rs485, &pa);
@@ -713,7 +723,7 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc) {
 }
 
 void USART1_IRQHandler(void) {
-	uart1_read_to_frame(&uart1);
+	uart1_read_to_frame(&huart1);
 }
 /* USER CODE END 4 */
 
