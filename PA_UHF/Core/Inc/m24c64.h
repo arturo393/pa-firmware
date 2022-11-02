@@ -31,7 +31,7 @@ extern "C" {
 // EEPROM ADDRESS (8bits)
 #define EEPROM_ADDR 0xA0
 
-#define BASE_ADDR 0x00
+#define BASE_ADDR 0x03
 
 
 typedef enum{

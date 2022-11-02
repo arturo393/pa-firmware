@@ -86,6 +86,7 @@ void m24c64_write_N(uint8_t page, uint8_t *data, uint8_t offset,uint8_t size) {
 		}
 		i2c1_byte_tx(CHIP_ADDR , buff, size+2);
 	}
+	HAL_Delay(6);
 }
 
 
