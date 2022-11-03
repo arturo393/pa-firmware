@@ -47,6 +47,7 @@ typedef struct LED{
 
 void led_init(void);
 void led_enable_kalive(uint32_t counter);
+void led_reset(LED_t *l);
 
 
 

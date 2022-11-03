@@ -6,10 +6,6 @@
  */
 #include "led.h"
 
-
-
-
-
 void led_init(void){
 
 	/*CURRENT LOW LED PA12  as output */
@@ -47,4 +43,13 @@ void led_enable_kalive(uint32_t counter){
 		else
 			sys_rp_led_on();
 	}
+}
+void led_reset(LED_t *l){
+l->ch_counter = 0;
+l->cl_counter = 0;
+l->cn_counter = 0;
+l->ka_counter = 0;
+l->sysrp_counter = 0;
+l->th_counter = 0;
+l->tok_counter = 0;
 }
