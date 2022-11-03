@@ -14,8 +14,8 @@
 
 #define MAX4003_DBM_MAX 0
 #define MAX4003_DBM_MIN -30
-#define MAX4003_ADC_MAX 1883
-#define MAX4003_ADC_MIN 488
+#define MAX4003_ADC_MAX ((uint16_t) 1884)
+#define MAX4003_ADC_MIN ((uint16_t) 488)
 
 #define MAX4003_IS_CALIBRATED 0xAA
 
