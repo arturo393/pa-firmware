@@ -1,3 +1,3 @@
-../Core/Src/rs485.c:9:13:rs485_check_frame	24	static
-../Core/Src/rs485.c:21:6:rs485_set_query_frame	32	static
-../Core/Src/rs485.c:96:6:rs485_parameters_cmd_action	16	static
+../Core/Src/rs485.c:9:16:rs485_check_frame	24	static
+../Core/Src/rs485.c:30:6:rs485_set_query_frame	32	static
+../Core/Src/rs485.c:105:6:rs485_parameters_cmd_action	16	static

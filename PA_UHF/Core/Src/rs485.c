@@ -6,16 +6,25 @@
  */
 #include "rs485.h"
 
-Rs485_cmd_t rs485_check_frame(uint8_t *frame, uint8_t len) {
+Rs485_status_t rs485_check_frame(RS485_t *r, UART1_t *u) {
 
-	if (strlen(frame) > (3 + 1 + 2))
-		if (frame[0] == LTEL_START_MARK)
-			if (frame[1] == MODULE_FUNCTION)
-				if (frame[2] == MODULE_ADDR)
-					for (int i = 3; i < len; i++)
-						if (frame[i] == LTEL_END_MARK)
-							return true;
-	return frame[3];
+	if (u->rx_count > (3 + 1 + 2)){
+		u->timeout = HAL_GetTick();
+		if (u->rx_buffer[0] == LTEL_START_MARK){
+			if (u->rx_buffer[1] == POWER_AMPLIFIER){
+				if (u->rx_buffer[2] == ID8){
+					for (int i = 3; i < u->rx_count; i++)
+						if (u->rx_buffer[i] == LTEL_END_MARK)
+							return DATA_OK;
+				} else
+					return WRONG_MODULE_ID;
+			} else
+				return NO_VALID_MODULE;
+		}else
+			return NOT_VALID_FRAME;
+	} else
+		return WAITING;
+	return NO_DATA;
 }
 
 void rs485_set_query_frame(RS485_t *r, Module_t *module) {

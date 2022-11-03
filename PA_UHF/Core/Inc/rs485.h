@@ -11,6 +11,7 @@
 #include "main.h"
 #include "stdbool.h"
 #include "module.h"
+#include "uart1.h"
 #include "stdio.h"
 
 typedef enum RS485_CMD {
@@ -19,6 +20,7 @@ typedef enum RS485_CMD {
 	QUERY_PARAMETER_SIGMA,
 	QUERY_PARAMETER_STR,
 	QUERY_ADC,
+	QUERY_ATT,
 	SET_ATT_LTEL = 0x020,
 	SET_POUT_MAX,
 	SET_POUT_MIN,
@@ -29,13 +31,24 @@ typedef enum RS485_CMD {
 	SET_ENABLE_PA = 0x22
 } Rs485_cmd_t;
 
+typedef enum RS485_STATUS{
+	DATA_OK,
+	NOT_VALID_FRAME,
+	NO_VALID_MODULE,
+	WRONG_MODULE_ID,
+	CRC_ERROR,
+	NO_DATA,
+	WAITING
+}Rs485_status_t ;
+
 typedef struct RS485{
 	Rs485_cmd_t cmd;
 	uint8_t len;
 	uint8_t *frame;
+	Rs485_status_t status;
 }RS485_t;
 
-Rs485_cmd_t rs485_check_frame( uint8_t *, uint8_t);
+Rs485_status_t rs485_check_frame(RS485_t *r, UART1_t *u);
 void rs485_set_query_frame(RS485_t* , Module_t *module);
 
 #endif /* INC_RS485_H_ */
