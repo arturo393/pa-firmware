@@ -14,12 +14,13 @@
 
 #define  RX_BUFFLEN 25
 #define TX_BUFFLEN  100
+#define SECONDS(x) x*1000
 
 typedef struct UART1 {
 	uint8_t *rx_buffer;
 	uint8_t *tx_buffer;
 	uint8_t rx_count;
-	bool is_data_ready;
+	uint32_t timeout;
 } UART1_t;
 
 void uart1_init(uint32_t, uint32_t, UART1_t*);
