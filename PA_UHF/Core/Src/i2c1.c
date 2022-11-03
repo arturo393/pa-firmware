@@ -85,12 +85,10 @@ void i2c1_buffReceive(char saddr, uint8_t *rcv, uint8_t N) {
 	bool timeout = false;
 	i2c1_start(saddr, READ, N);
 
-
-	char data = 0;
 	for (int i = 0; i < N; i++) {
 		while (!READ_BIT(I2C1->ISR, I2C_ISR_RXNE) & !timeout) {
 			if (HAL_GetTick() - counter > 500)
-				return 0x00;
+				timeout = true;
 		}
 		rcv[i] = I2C1->RXDR;
 	}
