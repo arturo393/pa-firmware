@@ -19,15 +19,14 @@
 #define  current_high_led_off() CLEAR_BIT(GPIOA->ODR,GPIO_ODR_OD10)
 #define current_high_led_on() SET_BIT(GPIOA->ODR,GPIO_ODR_OD10)
 
-
 #define sys_rp_led_off() CLEAR_BIT(GPIOC->ODR,GPIO_ODR_OD6)
 #define sys_rp_led_on() SET_BIT(GPIOC->ODR,GPIO_ODR_OD6)
 
 #define  temperature_ok_led_off() CLEAR_BIT(GPIOA->ODR,GPIO_ODR_OD9)
 #define temperature_ok_led_on() SET_BIT(GPIOA->ODR,GPIO_ODR_OD9)
 
-#define temperature_high_led_off() CLEAR_BIT(GPIOA->ODR,GPIO_ODR_OD9)
-#define temperature_highled_on() SET_BIT(GPIOA->ODR,GPIO_ODR_OD9)
+#define temperature_high_led_off() CLEAR_BIT(GPIOA->ODR,GPIO_ODR_OD8)
+#define temperature_high_led_on() SET_BIT(GPIOA->ODR,GPIO_ODR_OD8)
 
 #define  LED_KA_STATE_TIMEOUT  1000
 #define LED_KA_ON_TIMEOUT  50
@@ -46,7 +45,8 @@ typedef struct LED{
 
 
 void led_init(void);
-void led_enable_kalive(uint32_t counter);
+void led_off(void);
+void led_enable_kalive(LED_t *l);
 void led_reset(LED_t *l);
 
 
