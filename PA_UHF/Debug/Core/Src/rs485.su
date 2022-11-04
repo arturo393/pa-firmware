@@ -1,3 +1,5 @@
-../Core/Src/rs485.c:9:16:rs485_check_frame	24	static
-../Core/Src/rs485.c:30:6:rs485_set_query_frame	32	static
-../Core/Src/rs485.c:105:6:rs485_parameters_cmd_action	16	static
+../Core/Src/rs485.c:9:6:rs485_init	16	static
+../Core/Src/rs485.c:14:16:rs485_check_frame	16	static
+../Core/Src/rs485.c:29:17:rs485_check_valid_module	24	static
+../Core/Src/rs485.c:42:6:rs485_set_query_frame	32	static
+../Core/Src/rs485.c:117:6:rs485_parameters_cmd_action	16	static

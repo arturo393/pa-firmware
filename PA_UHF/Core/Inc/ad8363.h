@@ -9,8 +9,8 @@
 
 #define AD8363_DBM_MAX 0
 #define AD8363_DBM_MIN -30
-#define AD8363_ADC_MAX ((uint16_t) 1883)
-#define AD8363_ADC_MIN  ((uint16_t) 488)
+#define AD8363_ADC_MAX ((uint16_t) 1882)
+#define AD8363_ADC_MIN  ((uint16_t) 487)
 
 #define AD8363_IS_CALIBRATED 0xAA
 
