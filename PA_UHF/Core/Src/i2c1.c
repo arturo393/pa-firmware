@@ -108,6 +108,9 @@ void i2c1_byte_tx(uint8_t saddr, uint8_t *data, uint8_t N) {
 	}
 
 	while (!READ_BIT(I2C1->ISR, I2C_ISR_STOPF)) {
+		if (HAL_GetTick() - counter > 500)
+			return;
+
 	}
 	SET_BIT(I2C1->ICR, I2C_ICR_STOPCF);
 
