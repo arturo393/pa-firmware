@@ -61,6 +61,8 @@ DMA_HandleTypeDef hdma_adc1;
 
 IWDG_HandleTypeDef hiwdg;
 
+UART_HandleTypeDef huart1;
+
 /* USER CODE BEGIN PV */
 #define SYS_FREQ 64000000
 #define APB_FREQ SYS_FREQ
@@ -104,6 +106,7 @@ static void MX_GPIO_Init(void);
 static void MX_DMA_Init(void);
 static void MX_ADC1_Init(void);
 static void MX_IWDG_Init(void);
+static void MX_USART1_UART_Init(void);
 /* USER CODE BEGIN PFP */
 
 uint8_t get_db_gain(uint16_t adc_gain);
@@ -152,10 +155,14 @@ int main(void)
 	/* enable clock access ro GPIOA and GPIOB */
 	SET_BIT(RCC->IOPENR, RCC_IOPENR_GPIOAEN);
 	SET_BIT(RCC->IOPENR, RCC_IOPENR_GPIOBEN);
-
-	/* PBA15 as output */
+    SET_BIT(RCC->IOPENR, RCC_IOPENR_GPIOCEN);
+	/* PA15 as output */
 	SET_BIT(GPIOA->MODER, GPIO_MODER_MODE15_0);
 	CLEAR_BIT(GPIOA->MODER, GPIO_MODER_MODE15_1);
+
+	/* PB5 as output */
+	SET_BIT(GPIOB->MODER, GPIO_MODER_MODE5_0);
+	CLEAR_BIT(GPIOB->MODER, GPIO_MODER_MODE5_1);
 
   /* USER CODE END Init */
 
@@ -172,29 +179,38 @@ int main(void)
 	uint8_t rcv_buff[2];
 	uint8_t send_buff[2];
 
-	module_init(&pa, POWER_AMPLIFIER, ID8);
+
+  /* USER CODE END SysInit */
+
+  /* Initialize all configured peripherals */
+ // MX_GPIO_Init();
+  MX_DMA_Init();
+  MX_ADC1_Init();
+//  MX_IWDG_Init();
+//  MX_USART1_UART_Init();
+ // GPIO_InitTypeDef GPIO_InitStruct = {0};
+  /*Configure GPIO pins : CLK_ATT_Pin DATA_ATT_Pin DE_485_Pin */
+// GPIO_InitStruct.Pin = DE_485_Pin;
+// GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+// GPIO_InitStruct.Pull = GPIO_NOPULL;
+// GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+// HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+  /* USER CODE BEGIN 2 */
+
+   module_init(&pa, POWER_AMPLIFIER, ID8);
 	led_init();
 	led_reset(&led);
 	i2c1_init();
 	uart1_init(HS16_CLK, BAUD_RATE, &uart1);
 	lm75_init();
-
-  /* USER CODE END SysInit */
-
-  /* Initialize all configured peripherals */
-  MX_GPIO_Init();
-  MX_DMA_Init();
-  MX_ADC1_Init();
-//  MX_IWDG_Init();
-  /* USER CODE BEGIN 2 */
-
+	rs485_init(&rs485);
 
 // Calibrate The ADC On Power-Up For Better Accuracy
-	HAL_ADCEx_Calibration_Start(&hadc1);
+//	HAL_ADCEx_Calibration_Start(&hadc1);
 	uart1_send_str("PA init\n\r");
 //	uint8_t addrs[5] = { 0 };  // 0x50 0x60 0x4f
 //	i2c1_scanner(addrs);
-	send_buff[0] = 30;
+
 
 	m24c64_read_N(BASE_ADDR, &(pa.att), ATT_VALUE_ADDR, 1);
 
@@ -222,49 +238,65 @@ int main(void)
 	vswr.min = (rcv_buff[0] << 8) | (rcv_buff[1] & 0xff);
 	m24c64_read_N(BASE_ADDR, rcv_buff, VSWR_ADC_MAX_ADDR_0, 2);
 	vswr.max = (rcv_buff[0] << 8) | (rcv_buff[1] & 0xff);
+	uart1_send_str("PA main end\n\r");
 
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
 
-	HAL_ADC_Start_DMA(&hadc1, (uint32_t*) adcResultsDMA, 4);
-	led.ka_counter = HAL_GetTick();
+//	HAL_ADC_Start_DMA(&hadc1, (uint32_t*) adcResultsDMA, 4);
+//	led.ka_counter = HAL_GetTick();
 	uart1.timeout = HAL_GetTick();
+	rs485.status  = WAITING;
 
 	while (1) {
 
+
 		/* USER CODE BEGIN 3 */
-		rs485.status = rs485_check_frame(&rs485, &uart1);
+
 		switch (rs485.status) {
 		case DATA_OK:
 			rs485.cmd = uart1.rx_buffer[3];
+			rs485.status = WAITING;
+			break;
+		case START_READING:
+			rs485.status = WAITING;
+			if(uart1_clean_by_timeout(&uart1,"START_READING"))
+				rs485.status = NO_DATA;
+			break;
+		case VALID_FRAME:
+			 rs485.status = rs485_check_valid_module(&uart1);
 			break;
 		case NOT_VALID_FRAME:
 			// TODO
 			uart1_clean_buffer(&uart1);
+			rs485.status= NO_DATA;
 			break;
 		case WRONG_MODULE_ID:
 			// TODO
 			uart1_clean_buffer(&uart1);
+			rs485.status= NO_DATA;
 			break;
 		case CRC_ERROR:
 			// TODO add crc
 			uart1_clean_buffer(&uart1);
 			break;
 		case WAITING:
-
+			rs485.status = rs485_check_frame(&rs485, &uart1);
+			uart1_clean_by_timeout(&uart1,"WAITING");
 			break;
 		case NO_DATA:
-
+			uart1_send_str("NO_DATA\r\n");
+			uart1_clean_buffer(&uart1);
+			rs485.status = WAITING;
 			break;
 		default:
-			rs485.cmd = NO_DATA;
-			if (uart1.rx_buffer[0] != '\0')
-				if (HAL_GetTick() - uart1.timeout > SECONDS(1))
-					uart1_clean_buffer(&uart1);
+			rs485.status= NO_DATA;
+			uart1_clean_buffer(&uart1);
 			break;
 		}
+
 
 		switch (rs485.cmd) {
 		case QUERY_PARAMETER_LTEL:
@@ -274,11 +306,12 @@ int main(void)
 			pa.gain = get_db_gain(adc_media[GAIN_i]);
 			pa.vswr = module_vswr_calc(pa.pout, pa.pr);
 			pa.pin = max4003_get_dbm(&pin, adc_media[PIN_i]);
-			pa.voltage = ADC_VOLTAGE_FACTOR * adc_media[VOLTAGE_i]/ 4096.0f;
+			pa.voltage = ADC_VOLTAGE_FACTOR * adc_media[VOLTAGE_i] / 4096.0f;
 			rs485.len = 14;
 			rs485.frame = (uint8_t*) malloc(14);
 			uart1_send_frame((char*) rs485.frame, 14);
 			free(rs485.frame);
+			rs485.cmd = NONE;
 			break;
 		case SET_ATT_LTEL:
 			pa.att = uart1.rx_buffer[6];
@@ -287,42 +320,51 @@ int main(void)
 			m24c64_write_N(BASE_ADDR, send_buff, ATT_VALUE_ADDR, 1);
 			sprintf((char*) uart1.tx_buffer, "Attenuation %u\r\n", pa.att);
 			uart1_send_frame((char*) uart1.tx_buffer, TX_BUFFLEN);
+			rs485.cmd = NONE;
 			break;
 		case SET_POUT_MAX:
 			pout.max = adc_media[POUT_i];
 			m24c64_store_16uvalue(POUT_MAX_READY_ADDR, pout.max);
 			uart1_send_str("Saved Pout max value\n\r");
+			rs485.cmd = NONE;
 			break;
 		case SET_POUT_MIN:
 			pout.min = adc_media[POUT_i];
 			m24c64_store_16uvalue(POUT_MIN_READY_ADDR, pout.min);
 			uart1_send_str("Saved Pout min value\n\r");
+			rs485.cmd = NONE;
 			break;
 		case SET_PIN_MAX:
 			pin.max = adc_media[PIN_i];
 			m24c64_store_16uvalue(PIN_MAX_READY_ADDR, pin.max);
 			uart1_send_str("Saved Pin max value\n\r");
+			rs485.cmd = NONE;
 			break;
 		case SET_PIN_MIN:
 			pin.min = adc_media[PIN_i];
 			m24c64_store_16uvalue(PIN_MAX_READY_ADDR, pin.min);
 			uart1_send_str("Saved Pin min value\n\r");
+			rs485.cmd = NONE;
 			break;
 		case SET_VSWR_MAX:
 			vswr.max = adc_media[VSWR_i];
 			m24c64_store_16uvalue(VSWR_MIN_READY_ADDR, vswr.max);
 			uart1_send_str("Saved VSWR max value\n\r");
+			rs485.cmd = NONE;
 			break;
 		case SET_VSWR_MIN:
 			vswr.min = adc_media[VSWR_i];
 			m24c64_store_16uvalue(VSWR_MAX_READY_ADDR, vswr.min);
 			uart1_send_str("Saved Pout min value\n\r");
+			rs485.cmd = NONE;
 			break;
 		case QUERY_PARAMETER_STR:
 			print_parameters(&uart1, pa);
+			rs485.cmd = NONE;
 			break;
 		case QUERY_ADC:
 			print_adc(&uart1, adc_media);
+			rs485.cmd = NONE;
 			break;
 		case QUERY_PARAMETER_SIGMA:
 			pa.temperature = lm75_read();
@@ -332,23 +374,25 @@ int main(void)
 			pa.gain = get_db_gain(adc_media[GAIN_i]);
 			pa.vswr = module_vswr_calc(pa.pout, pa.pr);
 			pa.pin = max4003_get_dbm(&pin, adc_media[PIN_i]);
-			pa.voltage = ADC_VOLTAGE_FACTOR * adc_media[VOLTAGE_i]/ 4096.0f;
+			pa.voltage = ADC_VOLTAGE_FACTOR * adc_media[VOLTAGE_i] / 4096.0f;
 
 			rs485_set_query_frame(&rs485, &pa);
 			uart1_send_frame((char*) rs485.frame, 14);
+			rs485.cmd = NONE;
 			break;
 		default:
-		//	vswr.media = adc_media[VSWR_i];
-		//	pout.media = adc_media[POUT_i];
-		//	current.media = adc_media[CURRENT_i];
-		//	gain.media = adc_media[GAIN_i];
-		//	pin.media = adc_media[PIN_i];
-		//	voltage.media = adc_media[VOLTAGE_i];
+			//	vswr.media = adc_media[VSWR_i];
+			//	pout.media = adc_media[POUT_i];
+			//	current.media = adc_media[CURRENT_i];
+			//	gain.media = adc_media[GAIN_i];
+			//	pin.media = adc_media[PIN_i];
+			//	voltage.media = adc_media[VOLTAGE_i];
 			rs485.cmd = NONE;
-
 			break;
 		}
-		led_enable_kalive(led.sysrp_counter);
+
+		led_enable_kalive(&led);
+
 
 		//HAL_IWDG_Refresh(&hiwdg);
 	}   //Fin while
@@ -544,6 +588,54 @@ static void MX_IWDG_Init(void)
 }
 
 /**
+  * @brief USART1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_USART1_UART_Init(void)
+{
+
+  /* USER CODE BEGIN USART1_Init 0 */
+
+  /* USER CODE END USART1_Init 0 */
+
+  /* USER CODE BEGIN USART1_Init 1 */
+
+  /* USER CODE END USART1_Init 1 */
+  huart1.Instance = USART1;
+  huart1.Init.BaudRate = 115200;
+  huart1.Init.WordLength = UART_WORDLENGTH_8B;
+  huart1.Init.StopBits = UART_STOPBITS_1;
+  huart1.Init.Parity = UART_PARITY_NONE;
+  huart1.Init.Mode = UART_MODE_TX_RX;
+  huart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart1.Init.OverSampling = UART_OVERSAMPLING_16;
+  huart1.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
+  huart1.Init.ClockPrescaler = UART_PRESCALER_DIV1;
+  huart1.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
+  if (HAL_UART_Init(&huart1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_UARTEx_SetTxFifoThreshold(&huart1, UART_TXFIFO_THRESHOLD_1_8) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_UARTEx_SetRxFifoThreshold(&huart1, UART_RXFIFO_THRESHOLD_1_8) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_UARTEx_DisableFifoMode(&huart1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN USART1_Init 2 */
+
+  /* USER CODE END USART1_Init 2 */
+
+}
+
+/**
   * Enable DMA controller clock
   */
 static void MX_DMA_Init(void)
@@ -607,11 +699,11 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /*Configure GPIO pins : CLK_ATT_Pin DATA_ATT_Pin DE_485_Pin */
-  GPIO_InitStruct.Pin = CLK_ATT_Pin|DATA_ATT_Pin|DE_485_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+// GPIO_InitStruct.Pin = CLK_ATT_Pin|DATA_ATT_Pin|DE_485_Pin;
+ // GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+ // GPIO_InitStruct.Pull = GPIO_NOPULL;
+ // GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+ // HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /*Configure GPIO pin : PC6 */
   GPIO_InitStruct.Pin = GPIO_PIN_6;
@@ -619,14 +711,6 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : PB6 PB7 */
-  GPIO_InitStruct.Pin = GPIO_PIN_6|GPIO_PIN_7;
-  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  GPIO_InitStruct.Alternate = GPIO_AF0_USART1;
-  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
 }
 

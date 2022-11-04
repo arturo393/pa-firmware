@@ -6,25 +6,37 @@
  */
 #include "rs485.h"
 
+void rs485_init(RS485_t *r) {
+	r->len = 0;
+	r->status = NO_DATA;
+	r->cmd = NONE;
+}
 Rs485_status_t rs485_check_frame(RS485_t *r, UART1_t *u) {
 
 	if (u->rx_count > (3 + 1 + 2)){
-		u->timeout = HAL_GetTick();
-		if (u->rx_buffer[0] == LTEL_START_MARK){
-			if (u->rx_buffer[1] == POWER_AMPLIFIER){
-				if (u->rx_buffer[2] == ID8){
-					for (int i = 3; i < u->rx_count; i++)
-						if (u->rx_buffer[i] == LTEL_END_MARK)
-							return DATA_OK;
-				} else
-					return WRONG_MODULE_ID;
+		if (u->rx_buffer[0] == LTEL_START_MARK)
+			if(u->rx_buffer[u->rx_count-1] == LTEL_END_MARK)
+				return VALID_FRAME;
+			else
+				return START_READING;
+		else
+			return START_READING;
+	}
+	return  WAITING;
+}
+
+
+Rs485_status_t  rs485_check_valid_module(UART1_t *uart1){
+if (uart1->rx_buffer[1] == POWER_AMPLIFIER) {
+			if (uart1->rx_buffer[2] == ID8) {
+				for (int i = 3; i  < uart1->rx_count; i++)
+					if (uart1->rx_buffer[i] == LTEL_END_MARK)
+						return   DATA_OK;
 			} else
-				return NO_VALID_MODULE;
-		}else
-			return NOT_VALID_FRAME;
-	} else
-		return WAITING;
-	return NO_DATA;
+				return   WRONG_MODULE_ID;
+		} else
+			return  NO_VALID_MODULE;
+return NO_VALID_MODULE;
 }
 
 void rs485_set_query_frame(RS485_t *r, Module_t *module) {
@@ -96,9 +108,9 @@ void rs485_set_query_frame(RS485_t *r, Module_t *module) {
 		}
 		crc = crc_get(&(r->frame[1]), 10);
 		memcpy(crc_frame, &crc, 2);
-		r->frame[13+1] = crc_frame[0];
-		r->frame[13+2] = crc_frame[1];
-		r->frame[13+3] = LTEL_END_MARK;
+		r->frame[13 + 1] = crc_frame[0];
+		r->frame[13 + 2] = crc_frame[1];
+		r->frame[13 + 3] = LTEL_END_MARK;
 	}
 }
 

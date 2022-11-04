@@ -7,6 +7,17 @@
 
 #include <uart1.h>
 
+uint8_t  uart1_clean_by_timeout(UART1_t* uart1,const char* str){
+		if (HAL_GetTick() - uart1->timeout > SECONDS(5)) {
+			uart1_send_str(str);
+			uart1_send_str("-TIMEOUT\r\n");
+			uart1_clean_buffer(uart1);
+			uart1->timeout = HAL_GetTick();
+			return 1;
+		}
+		return 0;
+}
+
 void uart1_gpio_init() {
 	/**USART1 GPIO Configuration
 	 PB6     ------> USART1_TX
@@ -16,34 +27,15 @@ void uart1_gpio_init() {
 	CLEAR_BIT(GPIOB->MODER, GPIO_MODER_MODE6_0);
 	SET_BIT(GPIOB->MODER, GPIO_MODER_MODE6_1);
 
+	CLEAR_BIT(GPIOB->MODER, GPIO_MODER_MODE7_0);
+	SET_BIT(GPIOB->MODER, GPIO_MODER_MODE7_1);
 
-	CLEAR_BIT(GPIOB->MODER, GPIO_MODER_MODE6_0);
-	SET_BIT(GPIOB->MODER, GPIO_MODER_MODE6_1);
-
-	CLEAR_BIT(GPIOB->MODER, GPIO_OTYPER_OT6);
-
-	CLEAR_BIT(GPIOB->MODER, GPIO_OTYPER_OT7);
-
-	CLEAR_BIT(GPIOB->MODER, GPIO_PUPDR_PUPD6_0);
-	SET_BIT(GPIOB->MODER, GPIO_PUPDR_PUPD6_1);
-
-	CLEAR_BIT(GPIOB->MODER, GPIO_PUPDR_PUPD7_0);
-	SET_BIT(GPIOB->MODER, GPIO_PUPDR_PUPD7_1);
-
-
-	CLEAR_BIT(GPIOB->OSPEEDR, GPIO_OSPEEDR_OSPEED6_0);
-	CLEAR_BIT(GPIOB->OSPEEDR, GPIO_OSPEEDR_OSPEED6_1);
-
-	SET_BIT(GPIOB->OSPEEDR, GPIO_OSPEEDR_OSPEED7_0);
-	SET_BIT(GPIOB->OSPEEDR, GPIO_OSPEEDR_OSPEED7_1);
-
-
-	SET_BIT(GPIOB->AFR[0], GPIO_AFRL_AFSEL6_0);
+	CLEAR_BIT(GPIOB->AFR[0], GPIO_AFRL_AFSEL6_0);
 	CLEAR_BIT(GPIOB->AFR[0], GPIO_AFRL_AFSEL6_1);
 	CLEAR_BIT(GPIOB->AFR[0], GPIO_AFRL_AFSEL6_2);
 	CLEAR_BIT(GPIOB->AFR[0], GPIO_AFRL_AFSEL6_3);
 
-	SET_BIT(GPIOB->AFR[0], GPIO_AFRL_AFSEL7_0);
+	CLEAR_BIT(GPIOB->AFR[0], GPIO_AFRL_AFSEL7_0);
 	CLEAR_BIT(GPIOB->AFR[0], GPIO_AFRL_AFSEL7_1);
 	CLEAR_BIT(GPIOB->AFR[0], GPIO_AFRL_AFSEL7_2);
 	CLEAR_BIT(GPIOB->AFR[0], GPIO_AFRL_AFSEL7_3);
@@ -75,17 +67,10 @@ void uart1_init(uint32_t pclk, uint32_t baud_rate, UART1_t *u) {
 	uart1_clean_buffer(u);
 
 	/* enable FIFO */
-	SET_BIT(USART1->CR2, USART_CR1_FIFOEN);
-	/* enable Rx timeout */
-	//SET_BIT(USART1->CR2, USART_CR2_RTOEN);
-	/**/
-	//MODIFY_REG(USART1->RTOR,USART_RTOR_RTO,100);
-	/*set length */
+	//SET_BIT(USART1->CR2, USART_CR1_FIFOEN);
 	/* Enable interrupt */
 	SET_BIT(USART1->CR1, USART_CR1_RXNEIE_RXFNEIE);
 	NVIC_EnableIRQ(USART1_IRQn);
-	//uart1_dma_init();
-//
 	SET_BIT(USART1->CR1, USART_CR1_UE);
 }
 
@@ -100,7 +85,7 @@ void uart1_dma_init() {
 }
 
 void uart1_write(char ch) {
-	SET_BIT(GPIOA->ODR, GPIO_ODR_OD15);
+	SET_BIT(GPIOB->ODR, GPIO_ODR_OD5);
 
 	while (!READ_BIT(USART1->ISR, USART_ISR_TXE_TXFNF))
 		;
@@ -109,7 +94,7 @@ void uart1_write(char ch) {
 	while (!READ_BIT(USART1->ISR, USART_ISR_TC))
 		;
 
-	CLEAR_BIT(GPIOA->ODR, GPIO_ODR_OD15);
+	CLEAR_BIT(GPIOB->ODR, GPIO_ODR_OD5);
 }
 
 void uart1_read(char *data, uint8_t size) {
@@ -160,17 +145,17 @@ void  uart1_read_to_frame(UART1_t *u) {
 
 void uart1_send_str(char *str) {
 	uint8_t i;
-	for (i = 0; str[i] != '\0'; i++){
+	for (i = 0; str[i] != '\0'; i++)
 		uart1_write(str[i]);
-		str[i] = "\0";
-	}
 }
 
 void uart1_send_frame(char *str, uint8_t len) {
 
 	if (len > 0) {
-		for (int i = 0; i < len; i++)
+		for (int i = 0; i < len; i++){
 			uart1_write(str[i]);
+			str[i] = (char) '\0';
+		}
 	}
 }
 

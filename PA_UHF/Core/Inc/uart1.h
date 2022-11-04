@@ -23,6 +23,7 @@ typedef struct UART1 {
 	uint32_t timeout;
 } UART1_t;
 
+uint8_t  uart1_clean_by_timeout(UART1_t* uart1,const char* str);
 void uart1_init(uint32_t, uint32_t, UART1_t*);
 void uart1_write(volatile char);
 void uart1_send_str( char*);
