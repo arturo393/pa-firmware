@@ -33,6 +33,8 @@ typedef enum RS485_CMD {
 
 typedef enum RS485_STATUS{
 	DATA_OK,
+	START_READING,
+	VALID_FRAME,
 	NOT_VALID_FRAME,
 	NO_VALID_MODULE,
 	WRONG_MODULE_ID,
@@ -49,6 +51,8 @@ typedef struct RS485{
 }RS485_t;
 
 Rs485_status_t rs485_check_frame(RS485_t *r, UART1_t *u);
+Rs485_status_t  rs485_check_valid_module(UART1_t *uart1);
 void rs485_set_query_frame(RS485_t* , Module_t *module);
+void rs485_init(RS485_t *);
 
 #endif /* INC_RS485_H_ */
