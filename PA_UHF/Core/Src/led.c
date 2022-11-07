@@ -41,13 +41,10 @@ void led_enable_kalive(LED_t *l) {
 	if (HAL_GetTick() -  l->ka_counter > LED_KA_STATE_TIMEOUT)
 		l->ka_counter = HAL_GetTick();
 	else {
-		if (HAL_GetTick() - l->ka_counter > LED_KA_ON_TIMEOUT) {
+		if (HAL_GetTick() - l->ka_counter > LED_KA_ON_TIMEOUT)
 			sys_rp_led_off();
-			current_low_led_off();
-		} else {
+		else
 			sys_rp_led_on();
-			current_low_led_on();
-		}
 	}
 
 }

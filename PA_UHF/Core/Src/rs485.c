@@ -8,7 +8,7 @@
 
 void rs485_init(RS485_t *r) {
 	r->len = 0;
-	r->status = NO_DATA;
+	r->status = DONE;
 	r->cmd = NONE;
 }
 Rs485_status_t rs485_check_frame(RS485_t *r, UART1_t *u) {

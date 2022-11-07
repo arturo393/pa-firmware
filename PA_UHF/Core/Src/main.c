@@ -72,12 +72,17 @@ IWDG_HandleTypeDef hiwdg;
 #define LTEL_FRAME_SIZE 14
 #define SIGMA_FRAME_SIZE 14
 #define MEDIA_NUM 20
-#define ADC_CHANNEL_NUM 6
+#define ADC_CHANNEL_NUM 7
 
 #define IS_READY 0xaa
 
+
+#define MAX_TEMP 30
+#define pa_on() CLEAR_BIT(GPIOA->ODR,GPIO_ODR_OD3)
+#define pa_off() SET_BIT(GPIOA->ODR,GPIO_ODR_OD3)
+
 typedef enum ADC_INDEX {
-	GAIN_i, POUT_i, VOLTAGE_i, CURRENT_i, VSWR_i, PIN_i
+	GAIN_i,CURRENT_i, VOLTAGE_i,VSWR_i, POUT_i, PIN_i,TEMP_i
 } ADC_INDEX_t;
 
 #define STARTING_MILLIS 5000U
@@ -161,6 +166,11 @@ int main(void)
 	SET_BIT(GPIOB->MODER, GPIO_MODER_MODE5_0);
 	CLEAR_BIT(GPIOB->MODER, GPIO_MODER_MODE5_1);
 
+
+	/* PA3  PA_HAB as output */
+	SET_BIT(GPIOA->MODER, GPIO_MODER_MODE3_0);
+	CLEAR_BIT(GPIOA->MODER, GPIO_MODER_MODE3_1);
+
   /* USER CODE END Init */
 
   /* Configure the system clock */
@@ -176,6 +186,8 @@ int main(void)
 	uint8_t rcv_buff[2];
 	uint8_t send_buff[2];
 
+	uint32_t lm75_timeout = 0;
+
 
   /* USER CODE END SysInit */
 
@@ -183,7 +195,7 @@ int main(void)
   MX_GPIO_Init();
   MX_DMA_Init();
   MX_ADC1_Init();
-  MX_IWDG_Init();
+ // MX_IWDG_Init();
   /* USER CODE BEGIN 2 */
 
    module_init(&pa, POWER_AMPLIFIER, ID8);
@@ -195,7 +207,7 @@ int main(void)
 	rs485_init(&rs485);
 
 // Calibrate The ADC On Power-Up For Better Accuracy
-//	HAL_ADCEx_Calibration_Start(&hadc1);
+	HAL_ADCEx_Calibration_Start(&hadc1);
 	uart1_send_str("PA init\n\r");
 //	uint8_t addrs[5] = { 0 };  // 0x50 0x60 0x4f
 //	i2c1_scanner(addrs);
@@ -234,9 +246,10 @@ int main(void)
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
 
-//	HAL_ADC_Start_DMA(&hadc1, (uint32_t*) adcResultsDMA, 4);
+	HAL_ADC_Start_DMA(&hadc1, (uint32_t*) adcResultsDMA, ADC_CHANNEL_NUM);
 //	led.ka_counter = HAL_GetTick();
 	uart1.timeout = HAL_GetTick();
+	lm75_timeout = HAL_GetTick();
 	rs485.status  = WAITING;
 
 	while (1) {
@@ -245,12 +258,12 @@ int main(void)
 		switch (rs485.status) {
 		case DATA_OK:
 			rs485.cmd = uart1.rx_buffer[3];
-			rs485.status = WAITING;
+			rs485.status = DONE;
 			break;
 		case START_READING:
 			rs485.status = WAITING;
 			if(uart1_clean_by_timeout(&uart1,"START_READING"))
-				rs485.status = NO_DATA;
+				rs485.status = DONE;
 			break;
 		case VALID_FRAME:
 			 rs485.status = rs485_check_valid_module(&uart1);
@@ -258,12 +271,12 @@ int main(void)
 		case NOT_VALID_FRAME:
 			// TODO
 			uart1_clean_buffer(&uart1);
-			rs485.status= NO_DATA;
+			rs485.status= DONE;
 			break;
 		case WRONG_MODULE_ID:
 			// TODO
 			uart1_clean_buffer(&uart1);
-			rs485.status= NO_DATA;
+			rs485.status= DONE;
 			break;
 		case CRC_ERROR:
 			// TODO add crc
@@ -273,13 +286,13 @@ int main(void)
 			rs485.status = rs485_check_frame(&rs485, &uart1);
 			uart1_clean_by_timeout(&uart1,"WAITING");
 			break;
-		case NO_DATA:
-			uart1_send_str("NO_DATA\r\n");
+		case DONE:
+			uart1_send_str("DONE\r\n");
 			uart1_clean_buffer(&uart1);
 			rs485.status = WAITING;
 			break;
 		default:
-			rs485.status= NO_DATA;
+			rs485.status= DONE;
 			uart1_clean_buffer(&uart1);
 			break;
 		}
@@ -377,12 +390,24 @@ int main(void)
 			break;
 		}
 
+
+
+		if(HAL_GetTick() - lm75_timeout  > SECONDS(5)){
+			pa.temperature = lm75_read();
+			lm75_timeout = HAL_GetTick();
+		}
+
+		if (pa.temperature > MAX_TEMP)
+			pa_off();
+		else
+			pa_on();
+
 		led_enable_kalive(&led);
 
 		//HAL_IWDG_Refresh(&hiwdg);
 	}   //Fin while
     /* USER CODE END WHILE */
-  }
+}
 
 /**
   * @brief System Clock Configuration
@@ -560,7 +585,7 @@ static void MX_IWDG_Init(void)
   /* USER CODE END IWDG_Init 1 */
   hiwdg.Instance = IWDG;
   hiwdg.Init.Prescaler = IWDG_PRESCALER_4;
-  hiwdg.Init.Window = 4095;
+  hiwdg.Init.Window = 2000;
   hiwdg.Init.Reload = 4095;
   if (HAL_IWDG_Init(&hiwdg) != HAL_OK)
   {

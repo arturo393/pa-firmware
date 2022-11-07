@@ -21,7 +21,7 @@
 
 //  LM75B IIC address
 #define    LM75_ADDR 0x4f
-
+#define LM75_TIMEOUT 5000
 //  LM75B registers
 typedef enum LM75_REG {
 	LM75_Temp, LM75_Conf, LM75_Thyst, LM75_Tos

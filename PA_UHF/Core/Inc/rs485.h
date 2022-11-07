@@ -39,7 +39,7 @@ typedef enum RS485_STATUS{
 	NO_VALID_MODULE,
 	WRONG_MODULE_ID,
 	CRC_ERROR,
-	NO_DATA,
+	DONE,
 	WAITING
 }Rs485_status_t ;
 
