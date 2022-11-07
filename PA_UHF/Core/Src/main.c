@@ -77,7 +77,10 @@ IWDG_HandleTypeDef hiwdg;
 #define IS_READY 0xaa
 
 
-#define MAX_TEMP 30
+#define MAX_TEMP 75
+#define MAX_CURRENT 600
+#define MIN_CURRENT 100
+
 #define pa_on() CLEAR_BIT(GPIOA->ODR,GPIO_ODR_OD3)
 #define pa_off() SET_BIT(GPIOA->ODR,GPIO_ODR_OD3)
 
@@ -186,7 +189,7 @@ int main(void)
 	uint8_t rcv_buff[2];
 	uint8_t send_buff[2];
 
-	uint32_t lm75_timeout = 0;
+	uint32_t pa_calc_timeout = 0;
 
 
   /* USER CODE END SysInit */
@@ -249,7 +252,7 @@ int main(void)
 	HAL_ADC_Start_DMA(&hadc1, (uint32_t*) adcResultsDMA, ADC_CHANNEL_NUM);
 //	led.ka_counter = HAL_GetTick();
 	uart1.timeout = HAL_GetTick();
-	lm75_timeout = HAL_GetTick();
+	pa_calc_timeout = HAL_GetTick();
 	rs485.status  = WAITING;
 
 	while (1) {
@@ -297,19 +300,26 @@ int main(void)
 			break;
 		}
 
+
 		switch (rs485.cmd) {
 		case QUERY_PARAMETER_LTEL:
-			pa.pr = max4003_get_dbm(&vswr, adc_media[VSWR_i]);
-			pa.pout = ad8363_get_dbm(&pout, adc_media[POUT_i]);
-			pa.current = ADC_CURRENT_FACTOR * adc_media[CURRENT_i] / 4096.0f;
-			pa.gain = get_db_gain(adc_media[GAIN_i]);
-			pa.vswr = module_vswr_calc(pa.pout, pa.pr);
-			pa.pin = max4003_get_dbm(&pin, adc_media[PIN_i]);
-			pa.voltage = ADC_VOLTAGE_FACTOR * adc_media[VOLTAGE_i] / 4096.0f;
 			rs485.len = 14;
 			rs485.frame = (uint8_t*) malloc(14);
 			uart1_send_frame((char*) rs485.frame, 14);
 			free(rs485.frame);
+			rs485.cmd = NONE;
+			break;
+		case QUERY_PARAMETER_STR:
+			print_parameters(&uart1, pa);
+			rs485.cmd = NONE;
+			break;
+		case QUERY_ADC:
+			print_adc(&uart1, adc_media);
+			rs485.cmd = NONE;
+			break;
+		case QUERY_PARAMETER_SIGMA:
+			rs485_set_query_frame(&rs485, &pa);
+			uart1_send_frame((char*) rs485.frame, 14);
 			rs485.cmd = NONE;
 			break;
 		case SET_ATT_LTEL:
@@ -357,15 +367,19 @@ int main(void)
 			uart1_send_str("Saved Pout min value\n\r");
 			rs485.cmd = NONE;
 			break;
-		case QUERY_PARAMETER_STR:
-			print_parameters(&uart1, pa);
+		case SET_ENABLE_PA:;
+			if (uart1.rx_buffer[5])
+				pa_on();
+			else
+				pa_off();
 			rs485.cmd = NONE;
 			break;
-		case QUERY_ADC:
-			print_adc(&uart1, adc_media);
+		default:
 			rs485.cmd = NONE;
 			break;
-		case QUERY_PARAMETER_SIGMA:
+		}
+
+		if(HAL_GetTick() - pa_calc_timeout  > SECONDS(5)){
 			pa.temperature = lm75_read();
 			pa.pr = max4003_get_dbm(&vswr, adc_media[VSWR_i]);
 			pa.pout = ad8363_get_dbm(&pout, adc_media[POUT_i]);
@@ -374,33 +388,37 @@ int main(void)
 			pa.vswr = module_vswr_calc(pa.pout, pa.pr);
 			pa.pin = max4003_get_dbm(&pin, adc_media[PIN_i]);
 			pa.voltage = ADC_VOLTAGE_FACTOR * adc_media[VOLTAGE_i] / 4096.0f;
+			pa_calc_timeout = HAL_GetTick();
+		}
 
-			rs485_set_query_frame(&rs485, &pa);
-			uart1_send_frame((char*) rs485.frame, 14);
-			rs485.cmd = NONE;
-			break;
-		default:
-			//	vswr.media = adc_media[VSWR_i];
-			//	pout.media = adc_media[POUT_i];
-			//	current.media = adc_media[CURRENT_i];
-			//	gain.media = adc_media[GAIN_i];
-			//	pin.media = adc_media[PIN_i];
-			//	voltage.media = adc_media[VOLTAGE_i];
-			rs485.cmd = NONE;
-			break;
+		if(pa.current >= MAX_CURRENT){
+			current_high_led_on();
+			current_normal_led_off();
+			current_low_led_off();
+		}
+		else if( pa.current > MIN_CURRENT && pa.current < MAX_CURRENT ) {
+			current_high_led_off();
+			current_normal_led_on();
+			current_low_led_off();
+
+		} else if ( pa.current <= MIN_CURRENT) {
+			current_high_led_off();
+			current_normal_led_off();
+			current_low_led_on();
 		}
 
 
-
-		if(HAL_GetTick() - lm75_timeout  > SECONDS(5)){
-			pa.temperature = lm75_read();
-			lm75_timeout = HAL_GetTick();
-		}
-
-		if (pa.temperature > MAX_TEMP)
+		if (pa.temperature > MAX_TEMP){
 			pa_off();
-		else
+			temperature_ok_led_off();
+			temperature_high_led_on();
+		}
+		else{
 			pa_on();
+			temperature_ok_led_on();
+			temperature_high_led_off();
+		}
+
 
 		led_enable_kalive(&led);
 
