@@ -57,7 +57,7 @@ void led_reset(LED_t *l) {
 	l->th_counter = 0;
 	l->tok_counter = 0;
 	current_low_led_on();
-	current_normal_on();
+	current_normal_led_on();
 	current_high_led_on();
 	sys_rp_led_on();
 	temperature_ok_led_on();
