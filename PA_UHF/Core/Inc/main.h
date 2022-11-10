@@ -57,8 +57,8 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
-#define TEMP_INT_Pin GPIO_PIN_14
-#define TEMP_INT_GPIO_Port GPIOC
+#define TEMP_OS_Pin GPIO_PIN_14
+#define TEMP_OS_GPIO_Port GPIOC
 #define AGC_LEVEL_Pin GPIO_PIN_0
 #define AGC_LEVEL_GPIO_Port GPIOA
 #define CURR_Pin GPIO_PIN_1
@@ -79,8 +79,6 @@ void Error_Handler(void);
 #define CLK_ATT_GPIO_Port GPIOB
 #define DATA_ATT_Pin GPIO_PIN_1
 #define DATA_ATT_GPIO_Port GPIOB
-#define T_SN_IN_Pin GPIO_PIN_2
-#define T_SN_IN_GPIO_Port GPIOB
 #define TEMP_HIGH_Pin GPIO_PIN_8
 #define TEMP_HIGH_GPIO_Port GPIOA
 #define TEMP_OK_Pin GPIO_PIN_9

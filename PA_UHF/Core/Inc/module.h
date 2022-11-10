@@ -27,9 +27,10 @@ typedef struct MODULE {
 	int8_t pr;
 	uint8_t voltage;
 	int8_t pin;
-	uint8_t current;
+	uint16_t current;
 	bool state;
 	float  temperature;
+	float temperature_out;
 	float vswr;
 	Id_t id;
 	Function_t function;

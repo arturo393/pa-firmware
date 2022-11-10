@@ -9,9 +9,10 @@
 
 uint8_t  uart1_clean_by_timeout(UART1_t* uart1,const char* str){
 		if (HAL_GetTick() - uart1->timeout > SECONDS(5)) {
-			uart1_send_str(str);
+			uart1_send_str((char*)str);
 			uart1_send_str("-TIMEOUT\r\n");
-			uart1_clean_buffer(uart1);
+			if(strlen(str)>0)
+				uart1_clean_buffer(uart1);
 			uart1->timeout = HAL_GetTick();
 			return 1;
 		}
@@ -197,4 +198,5 @@ uint8_t uart1_nonblocking_read(void) {
 		if (READ_BIT(USART1->ISR, USART_ISR_RXNE_RXFNE))
 			return USART1->RDR;
 	}
+	return '\0';
 }

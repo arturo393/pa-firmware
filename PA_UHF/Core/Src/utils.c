@@ -44,4 +44,3 @@ uint8_t Crc8(const void* vptr, int len) {
   return (uint8_t)(crc >> 8);
 }
 
-

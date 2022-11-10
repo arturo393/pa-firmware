@@ -11,6 +11,7 @@
 #include "stm32g0xx_hal.h"
 #include "stdbool.h"
 #include "stdlib.h"
+#include "string.h"
 
 #define  RX_BUFFLEN 25
 #define TX_BUFFLEN  100

@@ -153,7 +153,6 @@ void i2c1_byteTransmit_old(char saddr, char *data, uint8_t N) {
 
 }
 
-
 void i2c1_start(char saddr, uint8_t transfer_request, uint8_t N) {
 	/*master 7 bit addressing mode */
 	CLEAR_BIT(I2C1->CR2, I2C_CR2_ADD10);

@@ -3,3 +3,4 @@
 ../Core/Src/rs485.c:29:17:rs485_check_valid_module	24	static
 ../Core/Src/rs485.c:42:6:rs485_set_query_frame	32	static
 ../Core/Src/rs485.c:117:6:rs485_parameters_cmd_action	16	static
+../Core/Src/rs485.c:121:6:rs485_update_status_by_uart	16	static
