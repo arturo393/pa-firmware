@@ -6,6 +6,25 @@
  */
 #include "rs485.h"
 
+uint16_t crc_get(uint8_t* buffer, uint8_t buff_len) {
+	uint8_t b;
+	uint8_t i;
+	uint16_t generator = 0x1021; //divisor is 16bit
+	uint16_t crc = 0;			 // CRC value is 16bit
+
+	for (b = 0; b < buff_len; b++) {
+		crc ^= ((uint16_t) (buffer[b] << 8)); // move byte into MSB of 16bit CRC
+		for (i = 0; i < 8; i++) {
+			if ((crc & 0x8000) != 0) // test for MSB = bit 15
+				crc = ((uint16_t) ((crc << 1) ^ generator));
+			else
+				crc <<= 1;
+		}
+	}
+	return crc;
+}
+
+
 void rs485_init(RS485_t *r) {
 	r->len = 0;
 	r->status = DONE;

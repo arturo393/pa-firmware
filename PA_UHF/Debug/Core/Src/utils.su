@@ -1,3 +1,2 @@
-../Core/Src/utils.c:3:10:crc_get	24	static
-../Core/Src/utils.c:21:6:crc_check	32	static
-../Core/Src/utils.c:32:9:Crc8	32	static
+../Core/Src/utils.c:4:6:crc_check	32	static
+../Core/Src/utils.c:15:9:Crc8	32	static

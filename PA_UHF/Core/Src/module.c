@@ -31,9 +31,3 @@ float module_vswr_calc(int8_t pf, int8_t pr){
 	result = den / num;
 	return result;
 }
-
-
-
-
-
-
