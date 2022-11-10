@@ -117,3 +117,48 @@ void rs485_set_query_frame(RS485_t *r, Module_t *module) {
 void rs485_parameters_cmd_action(uint8_t *frame) {
 
 }
+
+void rs485_update_status_by_uart(RS485_t *rs485,UART1_t *uart1){
+
+	switch (rs485->status) {
+	case DATA_OK:
+		rs485->cmd = uart1->rx_buffer[3];
+		rs485->status = DONE;
+		break;
+	case START_READING:
+		rs485->status = WAITING;
+		if (uart1_clean_by_timeout(uart1, "START_READING"))
+			rs485->status = DONE;
+		break;
+	case VALID_FRAME:
+		rs485->status = rs485_check_valid_module(uart1);
+		break;
+	case NOT_VALID_FRAME:
+		// TODO
+		uart1_clean_buffer(uart1);
+		rs485->status = DONE;
+		break;
+	case WRONG_MODULE_ID:
+		// TODO
+		uart1_clean_buffer(uart1);
+		rs485->status = DONE;
+		break;
+	case CRC_ERROR:
+		// TODO add crc
+		uart1_clean_buffer(uart1);
+		break;
+	case WAITING:
+		rs485->status = rs485_check_frame(rs485, uart1);
+		uart1_clean_by_timeout(uart1, "WAITING");
+		break;
+	case DONE:
+		uart1_send_str("DONE\r\n");
+		uart1_clean_buffer(uart1);
+		rs485->status = WAITING;
+		break;
+	default:
+		rs485->status = DONE;
+		uart1_clean_buffer(uart1);
+		break;
+	}
+}

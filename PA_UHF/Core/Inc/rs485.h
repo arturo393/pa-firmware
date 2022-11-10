@@ -13,6 +13,7 @@
 #include "module.h"
 #include "uart1.h"
 #include "stdio.h"
+#include "string.h"
 
 typedef enum RS485_CMD {
 	NONE,
@@ -54,5 +55,6 @@ Rs485_status_t rs485_check_frame(RS485_t *r, UART1_t *u);
 Rs485_status_t  rs485_check_valid_module(UART1_t *uart1);
 void rs485_set_query_frame(RS485_t* , Module_t *module);
 void rs485_init(RS485_t *);
+void rs485_update_status_by_uart(RS485_t *rs485,UART1_t *uart1);
 
 #endif /* INC_RS485_H_ */
