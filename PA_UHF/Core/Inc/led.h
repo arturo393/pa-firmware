@@ -30,6 +30,9 @@
 
 #define  LED_KA_STATE_TIMEOUT  1000
 #define LED_KA_ON_TIMEOUT  50
+#define LED_MAX_CURRENT 600
+#define LED_MIN_CURRENT 100
+#define LED_MAX_TEMPERATURE 75
 
 
 typedef struct LED{
@@ -48,7 +51,8 @@ void led_init(void);
 void led_off(void);
 void led_enable_kalive(LED_t *l);
 void led_reset(LED_t *l);
-
+void led_current_update(int16_t current);
+uint8_t led_temperature_update(uint8_t tempearture);
 
 
 #endif /* INC_LED_H_ */

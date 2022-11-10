@@ -38,7 +38,7 @@ void led_off(void) {
 }
 
 void led_enable_kalive(LED_t *l) {
-	if (HAL_GetTick() -  l->ka_counter > LED_KA_STATE_TIMEOUT)
+	if (HAL_GetTick() - l->ka_counter > LED_KA_STATE_TIMEOUT)
 		l->ka_counter = HAL_GetTick();
 	else {
 		if (HAL_GetTick() - l->ka_counter > LED_KA_ON_TIMEOUT)
@@ -62,4 +62,34 @@ void led_reset(LED_t *l) {
 	sys_rp_led_on();
 	temperature_ok_led_on();
 	temperature_high_led_on();
+}
+
+void led_current_update(int16_t current) {
+
+	if (current >= LED_MAX_CURRENT) {
+		current_high_led_on();
+		current_normal_led_off();
+		current_low_led_off();
+	} else if (current > LED_MIN_CURRENT && current < LED_MAX_CURRENT) {
+		current_high_led_off();
+		current_normal_led_on();
+		current_low_led_off();
+
+	} else if (current <= LED_MIN_CURRENT) {
+		current_high_led_off();
+		current_normal_led_off();
+		current_low_led_on();
+	}
+}
+
+uint8_t led_temperature_update(uint8_t temperature) {
+	if (temperature > LED_MAX_TEMPERATURE) {
+		temperature_ok_led_off();
+		temperature_high_led_on();
+		return 1;
+	} else {
+		temperature_ok_led_on();
+		temperature_high_led_off();
+		return 0;
+	}
 }
