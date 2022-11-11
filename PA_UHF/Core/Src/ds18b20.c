@@ -1,6 +1,6 @@
 #include "ds18b20.h"
 
-void ds18b20_timer3_init() {
+void ds18b20_init() {
 	/*enable clock access to timer 2 */
 	SET_BIT(RCC->APBENR2, RCC_APBENR2_TIM16EN);
 	/*set preescaler value */
@@ -13,8 +13,8 @@ void ds18b20_timer3_init() {
 	/*enable timer 3*/
 	SET_BIT(TIM16->CR1, TIM_CR1_CEN);
 	SET_BIT(TIM16->DIER, TIM_DIER_UIE);
-	NVIC_EnableIRQ(TIM16_IRQn);
-	CLEAR_BIT(TIM16->SR, TIM_SR_UIF);
+//	NVIC_EnableIRQ(TIM16_IRQn);
+//	CLEAR_BIT(TIM16->SR, TIM_SR_UIF);
 }
 
 void delay_us(uint16_t us) {

@@ -21,7 +21,7 @@ void set_vdd_as_output();
 void set_vdd_as_input();
 void ds18b20_convert();
 float ds18b20_read_temperature();
-void ds18b20_timer3_init();
+void ds18b20_init();
 void delay_us(uint16_t us);
 
 
