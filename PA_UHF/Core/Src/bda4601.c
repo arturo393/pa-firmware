@@ -6,6 +6,17 @@ eeprom.c * bda4601.c
  */
 #include "bda4601.h"
 
+
+void bda4601_init(uint8_t att){
+	void bda460_init(){
+
+	 bda4601_pin_init();
+	if (att > 0 && att < 30)
+		bda4601_set_initial_att(att, STARTING_MILLIS);
+	else
+		bda4601_set_att(0, 3);
+	}
+}
 void bda4601_pin_init(void) {
 
 	/* DATA_ATT  PB1 as output */
