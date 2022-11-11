@@ -29,6 +29,11 @@ void rs485_init(RS485_t *r) {
 	r->len = 0;
 	r->status = DONE;
 	r->cmd = NONE;
+
+	/* PB5 DE485 as output  */
+	SET_BIT(GPIOB->MODER, GPIO_MODER_MODE5_0);
+	CLEAR_BIT(GPIOB->MODER, GPIO_MODER_MODE5_1);
+
 }
 Rs485_status_t rs485_check_frame(RS485_t *r, UART1_t *u) {
 
