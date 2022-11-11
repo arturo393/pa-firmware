@@ -62,8 +62,6 @@ DMA_HandleTypeDef hdma_adc1;
 
 IWDG_HandleTypeDef hiwdg;
 
-UART_HandleTypeDef huart1;
-
 /* USER CODE BEGIN PV */
 #define SYS_FREQ 64000000
 #define APB_FREQ SYS_FREQ
@@ -76,19 +74,14 @@ UART_HandleTypeDef huart1;
 #define SIGMA_FRAME_SIZE 14
 #define MEDIA_NUM 20
 #define ADC_CHANNEL_NUM 7
-
 #define IS_READY 0xaa
 
-#define MAX_TEMPERATURE 75
 
-#define pa_on() CLEAR_BIT(GPIOA->ODR,GPIO_ODR_OD3)
-#define pa_off() SET_BIT(GPIOA->ODR,GPIO_ODR_OD3)
+
 
 typedef enum ADC_INDEX {
 	GAIN_i, CURRENT_i, VOLTAGE_i, VSWR_i, POUT_i, PIN_i, TEMP_i
 } ADC_INDEX_t;
-
-#define STARTING_MILLIS 5000U
 
 static const float ADC_CURRENT_FACTOR = 298.1818182f;
 static const float ADC_VOLTAGE_FACTOR = 0.007404330f;
@@ -99,9 +92,9 @@ uint16_t adc_media[ADC_CHANNEL_NUM];
 uint16_t sum[ADC_CHANNEL_NUM];
 uint8_t adc_counter = 0;
 bool adcDataReady = false;
-float temp_in;
-float temp_out;
-UART1_t uart1;
+Module_t *pa_test;
+UART1_t *uart1_ptr;
+
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc);
 
 /* USER CODE END PV */
@@ -111,12 +104,57 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_DMA_Init(void);
 static void MX_ADC1_Init(void);
-static void MX_USART1_UART_Init(void);
 static void MX_IWDG_Init(void);
 /* USER CODE BEGIN PFP */
 
-uint8_t get_db_gain(uint16_t adc_gain);
-uint8_t get_dbm_pout(uint16_t pout_adc);
+uint8_t get_db_gain(uint16_t adc_gain) {
+
+	if (adc_gain >= 3781)
+		return 45;
+	else if (adc_gain < 3781 && adc_gain >= 1515)
+		return 0.0022f * adc_gain + 36.6571f;
+	else if (adc_gain < 1515 && adc_gain >= 1188)
+		return (0.0153f * adc_gain + 16.8349f);
+	else if (adc_gain < 1188 && adc_gain >= 1005)
+		return (0.0273f * adc_gain + 2.540f);
+	else if (adc_gain < 1005 && adc_gain >= 897)
+		return (0.0463f * adc_gain - 16.5278f);
+	else if (adc_gain < 897 && adc_gain >= 825)
+		return (0.0694f * adc_gain - 37.2917f);
+	else if (adc_gain < 825 && adc_gain >= 776)
+		return (0.1020f * adc_gain - 64.1837f);
+	else if (adc_gain < 776 && adc_gain >= 746)
+		return (0.1667f * adc_gain - 114.333f);
+	else if (adc_gain < 746 && adc_gain >= 733)
+		return (0.3846f * adc_gain - 276.9231f);
+	else if (adc_gain < 733 && adc_gain >= 725)
+		return (0.625f * adc_gain - 453.125f);
+	else if (adc_gain < 725)
+		return 0;
+	return 0;
+}
+
+void TIM3_IRQHandler(void) {
+	CLEAR_BIT(TIM3->SR, TIM_SR_UIF);
+	HAL_ADC_Start_DMA(&hadc1, (uint32_t*) adcResultsDMA, ADC_CHANNEL_NUM);
+}
+
+void adc_get_resultsDMA(uint8_t _adc_counter) {
+	for (int i = 0; i < ADC_CHANNEL_NUM; i++) {
+		sum[i] -= adc_values[i][_adc_counter];
+		adc_values[i][_adc_counter] = adcResultsDMA[i];
+		sum[i] += adc_values[i][_adc_counter];
+		adc_media[i] = sum[i] / MEDIA_NUM;
+	}
+}
+
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc) {
+	adcDataReady = true;
+}
+
+void USART1_IRQHandler(void) {
+	uart1_read_to_frame(uart1_ptr);
+}
 
 void print_parameters(UART1_t *u, Module_t m) {
 	sprintf((char*) u->tx_buffer,
@@ -132,8 +170,6 @@ void print_adc(UART1_t *u, uint16_t *adc) {
 	uart1_send_frame((char*) u->tx_buffer, TX_BUFFLEN);
 	uart1_clean_buffer(u);
 }
-
-//void uart_reset_reading(UART_HandleTypeDef *huart);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -161,21 +197,14 @@ int main(void) {
 	SET_BIT(RCC->IOPENR, RCC_IOPENR_GPIOAEN);
 	SET_BIT(RCC->IOPENR, RCC_IOPENR_GPIOBEN);
 	SET_BIT(RCC->IOPENR, RCC_IOPENR_GPIOCEN);
+
 	/* PA15 as output */
 	SET_BIT(GPIOA->MODER, GPIO_MODER_MODE15_0);
 	CLEAR_BIT(GPIOA->MODER, GPIO_MODER_MODE15_1);
 
-	/* PB5 as output */
-	SET_BIT(GPIOB->MODER, GPIO_MODER_MODE5_0);
-	CLEAR_BIT(GPIOB->MODER, GPIO_MODER_MODE5_1);
 
-	/* PC15  TIMER_TEST  as output */
-	SET_BIT(GPIOC->MODER, GPIO_MODER_MODE15_0);
-	CLEAR_BIT(GPIOC->MODER, GPIO_MODER_MODE15_1);
 
-	/* PA3  PA_HAB as output */
-	SET_BIT(GPIOA->MODER, GPIO_MODER_MODE3_0);
-	CLEAR_BIT(GPIOA->MODER, GPIO_MODER_MODE3_1);
+
 
 	/* USER CODE END Init */
 
@@ -191,38 +220,32 @@ int main(void) {
 	LED_t led;
 	uint8_t rcv_buff[2];
 	uint8_t send_buff[2];
-
-	uint32_t pa_calc_timeout = 0;
+	UART1_t uart1;
+	pa_test = &pa;
+	uart1_ptr = &uart1;
 
 	/* USER CODE END SysInit */
 
 	/* Initialize all configured peripherals */
-	MX_GPIO_Init();
+//	MX_GPIO_Init();
 	MX_DMA_Init();
 	MX_ADC1_Init();
-	MX_USART1_UART_Init();
 //  MX_IWDG_Init();
 	/* USER CODE BEGIN 2 */
 
 	module_init(&pa, POWER_AMPLIFIER, ID8);
-	led_init();
-	led_reset(&led);
+	led_init(&led);
 	i2c1_init();
 	uart1_init(HS16_CLK, BAUD_RATE, &uart1);
 	lm75_init();
 	rs485_init(&rs485);
-	ds18b20_timer3_init();
+	ds18b20_init();
 
-// Calibrate The ADC On Power-Up For Better Accuracy
-
-	uart1_send_str("PA init\n\r");
 
 	m24c64_read_N(BASE_ADDR, &(pa.att), ATT_VALUE_ADDR, 1);
 
-	if (pa.att > 0 && pa.att < 30)
-		bda4601_set_initial_att(pa.att, STARTING_MILLIS);
-	else
-		bda4601_set_att(0, 3);
+	bda4601_init(pa.att);
+
 
 	m24c64_init_16uvalue(POUT_MAX_READY_ADDR, AD8363_ADC_MAX);
 	m24c64_init_16uvalue(POUT_MIN_READY_ADDR, AD8363_ADC_MIN);
@@ -233,20 +256,22 @@ int main(void) {
 
 	m24c64_read_N(BASE_ADDR, rcv_buff, POUT_ADC_MIN_ADDR_0, 2);
 	pout.min = (rcv_buff[0] << 8) | (rcv_buff[1] & 0xff);
+
 	m24c64_read_N(BASE_ADDR, rcv_buff, POUT_ADC_MAX_ADDR_0, 2);
 	pout.max = (rcv_buff[0] << 8) | (rcv_buff[1] & 0xff);
+
 	m24c64_read_N(BASE_ADDR, rcv_buff, PIN_ADC_MIN_ADDR_0, 2);
 	pin.min = (rcv_buff[0] << 8) | (rcv_buff[1] & 0xff);
+
 	m24c64_read_N(BASE_ADDR, rcv_buff, PIN_ADC_MAX_ADDR_0, 2);
 	pin.max = (rcv_buff[0] << 8) | (rcv_buff[1] & 0xff);
+
 	m24c64_read_N(BASE_ADDR, rcv_buff, VSWR_ADC_MIN_ADDR_0, 2);
 	vswr.min = (rcv_buff[0] << 8) | (rcv_buff[1] & 0xff);
+
 	m24c64_read_N(BASE_ADDR, rcv_buff, VSWR_ADC_MAX_ADDR_0, 2);
 	vswr.max = (rcv_buff[0] << 8) | (rcv_buff[1] & 0xff);
-	uart1_send_str("PA main end\n\r");
 
-//	HAL_ADC_Start_DMA(&hadc1, (uint32_t*) adcResultsDMA, ADC_CHANNEL_NUM);
-	pa_calc_timeout = HAL_GetTick();
 	/* USER CODE END 2 */
 
 	/* Infinite loop */
@@ -333,15 +358,16 @@ int main(void) {
 			break;
 		}
 
-		if (HAL_GetTick() - pa_calc_timeout > SECONDS(2)) {
+		if (adcDataReady) {
 
+			uart1_send_str("ADC_CONVERT_CALC\r\n");
 			adc_get_resultsDMA(adc_counter);
 			adcDataReady = false;
 			adc_counter++;
 			if (adc_counter >= MEDIA_NUM)
 				adc_counter = 0;
-			ds18b20_convert();
 
+			ds18b20_convert();
 			pa.temperature_out = ds18b20_read_temperature();
 			pa.temperature = lm75_read();
 			pa.pr = max4003_get_dbm(&vswr, adc_media[VSWR_i]);
@@ -351,12 +377,17 @@ int main(void) {
 			pa.vswr = module_vswr_calc(pa.pout, pa.pr);
 			pa.pin = max4003_get_dbm(&pin, adc_media[PIN_i]);
 			pa.voltage = ADC_VOLTAGE_FACTOR * adc_media[VOLTAGE_i] / 4096.0f;
-			pa_calc_timeout = HAL_GetTick();
-			temp_out = pa.temperature_out;
-			temp_in = pa.temperature;
 		}
 
-		pa.temperature > MAX_TEMPERATURE ? pa_off() : pa_on();
+
+//		pa.temperature > MAX_TEMPERATURE ? pa_off() : pa_on();
+
+		if(pa.temperature_out > MAX_TEMPERATURE)
+			pa_off();
+		if(pa.temperature_out < SAFE_TEMPERATURE)
+			pa_on();
+
+		pa.state =pa_state();
 
 		led_temperature_update(pa.temperature);
 		led_current_update(pa.current);
@@ -437,15 +468,14 @@ static void MX_ADC1_Init(void) {
 	hadc1.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
 	hadc1.Init.LowPowerAutoWait = DISABLE;
 	hadc1.Init.LowPowerAutoPowerOff = DISABLE;
-	hadc1.Init.ContinuousConvMode = DISABLE;
+	hadc1.Init.ContinuousConvMode = ENABLE;
 	hadc1.Init.NbrOfConversion = 7;
-	hadc1.Init.DiscontinuousConvMode = DISABLE;
 	hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
 	hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
 	hadc1.Init.DMAContinuousRequests = DISABLE;
 	hadc1.Init.Overrun = ADC_OVR_DATA_PRESERVED;
-	hadc1.Init.SamplingTimeCommon1 = ADC_SAMPLETIME_1CYCLE_5;
-	hadc1.Init.SamplingTimeCommon2 = ADC_SAMPLETIME_1CYCLE_5;
+	hadc1.Init.SamplingTimeCommon1 = ADC_SAMPLETIME_160CYCLES_5;
+	hadc1.Init.SamplingTimeCommon2 = ADC_SAMPLETIME_160CYCLES_5;
 	hadc1.Init.OversamplingMode = DISABLE;
 	hadc1.Init.TriggerFrequencyMode = ADC_TRIGGER_FREQ_HIGH;
 	if (HAL_ADC_Init(&hadc1) != HAL_OK) {
@@ -542,51 +572,6 @@ static void MX_IWDG_Init(void) {
 }
 
 /**
- * @brief USART1 Initialization Function
- * @param None
- * @retval None
- */
-static void MX_USART1_UART_Init(void) {
-
-	/* USER CODE BEGIN USART1_Init 0 */
-
-	/* USER CODE END USART1_Init 0 */
-
-	/* USER CODE BEGIN USART1_Init 1 */
-
-	/* USER CODE END USART1_Init 1 */
-	huart1.Instance = USART1;
-	huart1.Init.BaudRate = 9600;
-	huart1.Init.WordLength = UART_WORDLENGTH_8B;
-	huart1.Init.StopBits = UART_STOPBITS_1;
-	huart1.Init.Parity = UART_PARITY_NONE;
-	huart1.Init.Mode = UART_MODE_TX_RX;
-	huart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
-	huart1.Init.OverSampling = UART_OVERSAMPLING_16;
-	huart1.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
-	huart1.Init.ClockPrescaler = UART_PRESCALER_DIV1;
-	huart1.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
-	if (HAL_UART_Init(&huart1) != HAL_OK) {
-		Error_Handler();
-	}
-	if (HAL_UARTEx_SetTxFifoThreshold(&huart1, UART_TXFIFO_THRESHOLD_1_8)
-			!= HAL_OK) {
-		Error_Handler();
-	}
-	if (HAL_UARTEx_SetRxFifoThreshold(&huart1, UART_RXFIFO_THRESHOLD_1_8)
-			!= HAL_OK) {
-		Error_Handler();
-	}
-	if (HAL_UARTEx_DisableFifoMode(&huart1) != HAL_OK) {
-		Error_Handler();
-	}
-	/* USER CODE BEGIN USART1_Init 2 */
-
-	/* USER CODE END USART1_Init 2 */
-
-}
-
-/**
  * Enable DMA controller clock
  */
 static void MX_DMA_Init(void) {
@@ -657,63 +642,19 @@ static void MX_GPIO_Init(void) {
 	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
 	HAL_GPIO_Init(SYS_RP_GPIO_Port, &GPIO_InitStruct);
 
+	/*Configure GPIO pins : PB6 PB7 */
+	GPIO_InitStruct.Pin = GPIO_PIN_6 | GPIO_PIN_7;
+	GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+	GPIO_InitStruct.Pull = GPIO_NOPULL;
+	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+	GPIO_InitStruct.Alternate = GPIO_AF0_USART1;
+	HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
 }
 
 /* USER CODE BEGIN 4 */
 
-uint8_t get_db_gain(uint16_t adc_gain) {
 
-	if (adc_gain >= 3781)
-		return 45;
-	else if (adc_gain < 3781 && adc_gain >= 1515)
-		return 0.0022f * adc_gain + 36.6571f;
-	else if (adc_gain < 1515 && adc_gain >= 1188)
-		return (0.0153f * adc_gain + 16.8349f);
-	else if (adc_gain < 1188 && adc_gain >= 1005)
-		return (0.0273f * adc_gain + 2.540f);
-	else if (adc_gain < 1005 && adc_gain >= 897)
-		return (0.0463f * adc_gain - 16.5278f);
-	else if (adc_gain < 897 && adc_gain >= 825)
-		return (0.0694f * adc_gain - 37.2917f);
-	else if (adc_gain < 825 && adc_gain >= 776)
-		return (0.1020f * adc_gain - 64.1837f);
-	else if (adc_gain < 776 && adc_gain >= 746)
-		return (0.1667f * adc_gain - 114.333f);
-	else if (adc_gain < 746 && adc_gain >= 733)
-		return (0.3846f * adc_gain - 276.9231f);
-	else if (adc_gain < 733 && adc_gain >= 725)
-		return (0.625f * adc_gain - 453.125f);
-	else if (adc_gain < 725)
-		return 0;
-	return 0;
-}
-
-void TIM16_IRQHandler(void) {
-	CLEAR_BIT(TIM16->SR, TIM_SR_UIF);
-	if (READ_BIT(GPIOC->ODR, GPIO_ODR_OD15))
-		CLEAR_BIT(GPIOC->ODR, GPIO_ODR_OD15);
-	else
-		SET_BIT(GPIOC->ODR, GPIO_ODR_OD15);
-}
-
-void adc_get_resultsDMA(uint8_t _adc_counter) {
-	for (int i = 0; i < ADC_CHANNEL_NUM; i++) {
-		sum[i] -= adc_values[i][_adc_counter];
-		adc_values[i][_adc_counter] = adcResultsDMA[i];
-		sum[i] += adc_values[i][_adc_counter];
-		adc_media[i] = sum[i] / MEDIA_NUM;
-	}
-}
-
-void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc) {
-	adcDataReady = true;
-
-	HAL_ADC_Start_DMA(&hadc1, (uint32_t*) adcResultsDMA, ADC_CHANNEL_NUM);
-}
-
-void USART1_IRQHandler(void) {
-	uart1_read_to_frame(&uart1);
-}
 /* USER CODE END 4 */
 
 /**
