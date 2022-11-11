@@ -6,7 +6,7 @@
  */
 #include "led.h"
 
-void led_init(void) {
+void led_init(LED_t *led) {
 
 	/*CURRENT LOW LED PA12  as output */
 	SET_BIT(GPIOA->MODER, GPIO_MODER_MODE12_0);
@@ -31,6 +31,8 @@ void led_init(void) {
 	/* TEMPERATURE HIGH LED PA8  as output */
 	SET_BIT(GPIOA->MODER, GPIO_MODER_MODE8_0);
 	CLEAR_BIT(GPIOA->MODER, GPIO_MODER_MODE8_1);
+
+	led_reset(led);
 
 }
 void led_off(void) {

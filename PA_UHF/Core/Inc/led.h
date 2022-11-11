@@ -48,7 +48,7 @@ typedef struct LED{
 
 
 
-void led_init(void);
+void led_init(LED_t *led);
 void led_off(void);
 void led_enable_kalive(LED_t *l);
 void led_reset(LED_t *l);
