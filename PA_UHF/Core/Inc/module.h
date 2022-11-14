@@ -12,8 +12,10 @@
 #ifndef INC_LTEL_H_
 #define INC_LTEL_H_
 
-#define MAX_TEMPERATURE 30 // 75
-#define SAFE_TEMPERATURE 25
+#define MAX_TEMPERATURE 75
+#define SAFE_TEMPERATURE 50
+#define MAX_VSWR 1.7
+#define SAFE_VSWR 1.0
 
 #define pa_on() SET_BIT(GPIOA->ODR,GPIO_ODR_OD3)
 #define pa_off() CLEAR_BIT(GPIOA->ODR,GPIO_ODR_OD3)
@@ -39,14 +41,13 @@ typedef struct MODULE {
 	uint8_t voltage;
 	int8_t pin;
 	uint16_t current;
-	State_t state;
+	State_t enable;
 	float  temperature;
 	float temperature_out;
 	float vswr;
 	Id_t id;
 	Function_t function;
-
-	uint8_t temperature_high;
+	bool calc_en;
 }  Module_t;
 
 
@@ -61,7 +62,7 @@ static const uint8_t LTEL_END_MARK = 0x7f;
 
 void  module_init(Module_t*,Function_t,Id_t);
 void module_calc_parameters(Module_t m,uint16_t* media_array);
-float module_vswr_calc(int8_t pf, int8_t pr);
 void module_sample_timer3_init();
+void module_pa_state_update(Module_t *pa);
 
 #endif /* INC_LTEL_H_ */
