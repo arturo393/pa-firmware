@@ -106,7 +106,7 @@ void rs485_set_query_frame(RS485_t *r, Module_t *module) {
 		case QUERY_PARAMETER_LTEL:
 			r->frame[4] = 0x00;
 			r->frame[5] = 0x08;
-			r->frame[6] = module->state;
+			r->frame[6] = module->enable;
 			r->frame[7] = 0x00;
 			r->frame[8] = module->temperature;
 			r->frame[9] = module->gain;
@@ -119,7 +119,7 @@ void rs485_set_query_frame(RS485_t *r, Module_t *module) {
 		case QUERY_PARAMETER_SIGMA:
 			r->frame[4] = 0x00;
 			r->frame[5] = 0x08;
-			r->frame[6] = module->state;
+			r->frame[6] = module->enable;
 			r->frame[7] = 0x00;
 			r->frame[8] = module->temperature;
 			r->frame[9] = module->gain;

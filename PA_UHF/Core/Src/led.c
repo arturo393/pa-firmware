@@ -85,6 +85,7 @@ void led_current_update(int16_t current) {
 }
 
 uint8_t led_temperature_update(uint8_t temperature) {
+
 	if (temperature > LED_MAX_TEMPERATURE) {
 		temperature_ok_led_off();
 		temperature_high_led_on();

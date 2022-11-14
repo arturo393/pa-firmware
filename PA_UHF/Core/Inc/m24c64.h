@@ -30,7 +30,6 @@ extern "C" {
 #define IS_READY 0xaa
 #define PADDRPOSITION 5
 
-
 // EEPROM ADDRESS (8bits)
 #define EEPROM_ADDR 0xA0
 

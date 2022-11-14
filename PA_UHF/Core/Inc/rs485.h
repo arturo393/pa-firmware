@@ -15,6 +15,9 @@
 #include "stdio.h"
 #include "string.h"
 
+#define LTEL_FRAME_SIZE 14
+#define SIGMA_FRAME_SIZE 14
+
 typedef enum RS485_CMD {
 	NONE,
 	QUERY_PARAMETER_LTEL = 0x11,

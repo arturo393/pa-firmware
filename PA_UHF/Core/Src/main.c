@@ -70,31 +70,9 @@ IWDG_HandleTypeDef hiwdg;
 #define LED_PIN PB1
 #define DE_PIN PA15
 
-#define LTEL_FRAME_SIZE 14
-#define SIGMA_FRAME_SIZE 14
-#define MEDIA_NUM 20
-#define ADC_CHANNEL_NUM 7
-#define IS_READY 0xaa
-
-
-
-
-typedef enum ADC_INDEX {
-	GAIN_i, CURRENT_i, VOLTAGE_i, VSWR_i, POUT_i, PIN_i, TEMP_i
-} ADC_INDEX_t;
-
-static const float ADC_CURRENT_FACTOR = 298.1818182f;
-static const float ADC_VOLTAGE_FACTOR = 0.007404330f;
-void adc_get_resultsDMA(uint8_t _adc_counter);
-volatile uint16_t adcResultsDMA[ADC_CHANNEL_NUM];
-uint16_t adc_values[ADC_CHANNEL_NUM][MEDIA_NUM];
-uint16_t adc_media[ADC_CHANNEL_NUM];
-uint16_t sum[ADC_CHANNEL_NUM];
-uint8_t adc_counter = 0;
-bool adcDataReady = false;
-Module_t *pa_test;
+Module_t *pa_ptr;
 UART1_t *uart1_ptr;
-
+ADC_t *adc_ptr;
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc);
 
 /* USER CODE END PV */
@@ -107,49 +85,14 @@ static void MX_ADC1_Init(void);
 static void MX_IWDG_Init(void);
 /* USER CODE BEGIN PFP */
 
-uint8_t get_db_gain(uint16_t adc_gain) {
-
-	if (adc_gain >= 3781)
-		return 45;
-	else if (adc_gain < 3781 && adc_gain >= 1515)
-		return 0.0022f * adc_gain + 36.6571f;
-	else if (adc_gain < 1515 && adc_gain >= 1188)
-		return (0.0153f * adc_gain + 16.8349f);
-	else if (adc_gain < 1188 && adc_gain >= 1005)
-		return (0.0273f * adc_gain + 2.540f);
-	else if (adc_gain < 1005 && adc_gain >= 897)
-		return (0.0463f * adc_gain - 16.5278f);
-	else if (adc_gain < 897 && adc_gain >= 825)
-		return (0.0694f * adc_gain - 37.2917f);
-	else if (adc_gain < 825 && adc_gain >= 776)
-		return (0.1020f * adc_gain - 64.1837f);
-	else if (adc_gain < 776 && adc_gain >= 746)
-		return (0.1667f * adc_gain - 114.333f);
-	else if (adc_gain < 746 && adc_gain >= 733)
-		return (0.3846f * adc_gain - 276.9231f);
-	else if (adc_gain < 733 && adc_gain >= 725)
-		return (0.625f * adc_gain - 453.125f);
-	else if (adc_gain < 725)
-		return 0;
-	return 0;
-}
-
 void TIM3_IRQHandler(void) {
 	CLEAR_BIT(TIM3->SR, TIM_SR_UIF);
-	HAL_ADC_Start_DMA(&hadc1, (uint32_t*) adcResultsDMA, ADC_CHANNEL_NUM);
-}
-
-void adc_get_resultsDMA(uint8_t _adc_counter) {
-	for (int i = 0; i < ADC_CHANNEL_NUM; i++) {
-		sum[i] -= adc_values[i][_adc_counter];
-		adc_values[i][_adc_counter] = adcResultsDMA[i];
-		sum[i] += adc_values[i][_adc_counter];
-		adc_media[i] = sum[i] / MEDIA_NUM;
-	}
+	pa_ptr->calc_en = true;
+	HAL_ADC_Start_DMA(&hadc1, (uint32_t*) adc_ptr->dma, CH_NUM);
 }
 
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc) {
-	adcDataReady = true;
+	adc_ptr->is_dma_ready = true;
 }
 
 void USART1_IRQHandler(void) {
@@ -202,10 +145,6 @@ int main(void) {
 	SET_BIT(GPIOA->MODER, GPIO_MODER_MODE15_0);
 	CLEAR_BIT(GPIOA->MODER, GPIO_MODER_MODE15_1);
 
-
-
-
-
 	/* USER CODE END Init */
 
 	/* Configure the system clock */
@@ -221,7 +160,9 @@ int main(void) {
 	uint8_t rcv_buff[2];
 	uint8_t send_buff[2];
 	UART1_t uart1;
-	pa_test = &pa;
+	ADC_t adc;
+	adc_ptr = &adc;
+	pa_ptr = &pa;
 	uart1_ptr = &uart1;
 
 	/* USER CODE END SysInit */
@@ -230,22 +171,22 @@ int main(void) {
 //	MX_GPIO_Init();
 	MX_DMA_Init();
 	MX_ADC1_Init();
+
 //  MX_IWDG_Init();
 	/* USER CODE BEGIN 2 */
 
 	module_init(&pa, POWER_AMPLIFIER, ID8);
-	led_init(&led);
+
 	i2c1_init();
 	uart1_init(HS16_CLK, BAUD_RATE, &uart1);
 	lm75_init();
 	rs485_init(&rs485);
 	ds18b20_init();
-
-
+	adc_init(&adc);
+	led_init(&led);
 	m24c64_read_N(BASE_ADDR, &(pa.att), ATT_VALUE_ADDR, 1);
 
 	bda4601_init(pa.att);
-
 
 	m24c64_init_16uvalue(POUT_MAX_READY_ADDR, AD8363_ADC_MAX);
 	m24c64_init_16uvalue(POUT_MIN_READY_ADDR, AD8363_ADC_MIN);
@@ -296,7 +237,7 @@ int main(void) {
 			rs485.cmd = NONE;
 			break;
 		case QUERY_ADC:
-			print_adc(&uart1, adc_media);
+			print_adc(&uart1, adc.media);
 			rs485.cmd = NONE;
 			break;
 		case QUERY_PARAMETER_SIGMA:
@@ -314,43 +255,43 @@ int main(void) {
 			rs485.cmd = NONE;
 			break;
 		case SET_POUT_MAX:
-			pout.max = adc_media[POUT_i];
+			pout.max = adc.media[POUT_i];
 			m24c64_store_16uvalue(POUT_MAX_READY_ADDR, pout.max);
 			uart1_send_str("Saved Pout max value\n\r");
 			rs485.cmd = NONE;
 			break;
 		case SET_POUT_MIN:
-			pout.min = adc_media[POUT_i];
+			pout.min = adc.media[POUT_i];
 			m24c64_store_16uvalue(POUT_MIN_READY_ADDR, pout.min);
 			uart1_send_str("Saved Pout min value\n\r");
 			rs485.cmd = NONE;
 			break;
 		case SET_PIN_MAX:
-			pin.max = adc_media[PIN_i];
+			pin.max = adc.media[PIN_i];
 			m24c64_store_16uvalue(PIN_MAX_READY_ADDR, pin.max);
 			uart1_send_str("Saved Pin max value\n\r");
 			rs485.cmd = NONE;
 			break;
 		case SET_PIN_MIN:
-			pin.min = adc_media[PIN_i];
+			pin.min = adc.media[PIN_i];
 			m24c64_store_16uvalue(PIN_MAX_READY_ADDR, pin.min);
 			uart1_send_str("Saved Pin min value\n\r");
 			rs485.cmd = NONE;
 			break;
 		case SET_VSWR_MAX:
-			vswr.max = adc_media[VSWR_i];
+			vswr.max = adc.media[VSWR_i];
 			m24c64_store_16uvalue(VSWR_MIN_READY_ADDR, vswr.max);
 			uart1_send_str("Saved VSWR max value\n\r");
 			rs485.cmd = NONE;
 			break;
 		case SET_VSWR_MIN:
-			vswr.min = adc_media[VSWR_i];
+			vswr.min = adc.media[VSWR_i];
 			m24c64_store_16uvalue(VSWR_MAX_READY_ADDR, vswr.min);
 			uart1_send_str("Saved Pout min value\n\r");
 			rs485.cmd = NONE;
 			break;
 		case SET_ENABLE_PA:
-			uart1.rx_buffer[5] == 1 ? pa_on() : pa_off();
+			pa.enable = uart1.rx_buffer[5] == 1 ? ON : OFF;
 			rs485.cmd = NONE;
 			break;
 		default:
@@ -358,41 +299,31 @@ int main(void) {
 			break;
 		}
 
-		if (adcDataReady) {
+		if (adc.is_dma_ready) {
+			adc.is_dma_ready = false;
+			adc_media_movil_calc(&adc);
+			adc_samples_update(&adc);
+		}
 
-			uart1_send_str("ADC_CONVERT_CALC\r\n");
-			adc_get_resultsDMA(adc_counter);
-			adcDataReady = false;
-			adc_counter++;
-			if (adc_counter >= MEDIA_NUM)
-				adc_counter = 0;
-
+		if (pa.calc_en) {
+			pa.calc_en = false;
 			ds18b20_convert();
 			pa.temperature_out = ds18b20_read_temperature();
 			pa.temperature = lm75_read();
-			pa.pr = max4003_get_dbm(&vswr, adc_media[VSWR_i]);
-			pa.pout = ad8363_get_dbm(&pout, adc_media[POUT_i]);
-			pa.current = ADC_CURRENT_FACTOR * adc_media[CURRENT_i] / 4096.0f;
-			pa.gain = get_db_gain(adc_media[GAIN_i]);
-			pa.vswr = module_vswr_calc(pa.pout, pa.pr);
-			pa.pin = max4003_get_dbm(&pin, adc_media[PIN_i]);
-			pa.voltage = ADC_VOLTAGE_FACTOR * adc_media[VOLTAGE_i] / 4096.0f;
+			pa.pr = max4003_get_dbm(&vswr, adc.media[VSWR_i]);
+			pa.pout = ad8363_get_dbm(&pout, adc.media[POUT_i]);
+			pa.current = ADC_CURRENT_FACTOR * adc.media[CURRENT_i] / 4096.0f;
+			pa.gain = adc_gain_calc(adc.media[GAIN_i]);
+			pa.vswr = max4003_vswr_calc(pa.pout, pa.pr);
+			pa.pin = max4003_get_dbm(&pin, adc.media[PIN_i]);
+			pa.voltage = ADC_VOLTAGE_FACTOR * adc.media[VOLTAGE_i] / 4096.0f;
 		}
 
+		module_pa_state_update(&pa);
 
-//		pa.temperature > MAX_TEMPERATURE ? pa_off() : pa_on();
-
-		if(pa.temperature_out > MAX_TEMPERATURE)
-			pa_off();
-		if(pa.temperature_out < SAFE_TEMPERATURE)
-			pa_on();
-
-		pa.state =pa_state();
-
-		led_temperature_update(pa.temperature);
 		led_current_update(pa.current);
 		led_enable_kalive(&led);
-
+		led_temperature_update(pa.temperature);
 		/* USER CODE END 3 */
 	}
 }
@@ -653,7 +584,6 @@ static void MX_GPIO_Init(void) {
 }
 
 /* USER CODE BEGIN 4 */
-
 
 /* USER CODE END 4 */
 

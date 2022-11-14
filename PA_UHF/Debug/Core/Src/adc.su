@@ -1,0 +1,4 @@
+../Core/Src/adc.c:9:6:adc_init	24	static
+../Core/Src/adc.c:16:6:adc_media_movil_calc	32	static
+../Core/Src/adc.c:31:6:adc_samples_update	16	static
+../Core/Src/adc.c:37:9:adc_gain_calc	16	static
