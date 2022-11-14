@@ -1,0 +1,21 @@
+/*
+ * bda4601.h
+ *
+ *  Created on: Sep 26, 2022
+ *      Author: sigmadev
+ */
+
+#ifndef INC_BDA4601_H_
+#define INC_BDA4601_H_
+#include "main.h"
+
+#define MAX_DB_VALUE 31
+#define MIN_DB_VALUE 0
+#define STARTING_MILLIS 5000U
+
+void bda4601_init(uint8_t att);
+void bda4601_pin_init(void);
+void bda4601_set_att(uint8_t, uint8_t);
+void bda4601_set_initial_att(uint8_t, uint16_t );
+
+#endif /* INC_BDA4601_H_ */

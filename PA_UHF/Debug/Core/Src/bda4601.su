@@ -1,0 +1,4 @@
+../Core/Src/bda4601.c:10:6:bda4601_init	24	static
+../Core/Src/bda4601.c:20:6:bda4601_pin_init	8	static
+../Core/Src/bda4601.c:34:6:bda4601_set_att	24	static
+../Core/Src/bda4601.c:68:6:bda4601_set_initial_att	40	static

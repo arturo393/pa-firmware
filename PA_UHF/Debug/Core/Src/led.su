@@ -1,0 +1,6 @@
+../Core/Src/led.c:9:6:led_init	16	static
+../Core/Src/led.c:38:6:led_off	8	static
+../Core/Src/led.c:42:6:led_enable_kalive	16	static
+../Core/Src/led.c:53:6:led_reset	16	static
+../Core/Src/led.c:69:6:led_current_update	16	static
+../Core/Src/led.c:87:9:led_temperature_update	16	static
