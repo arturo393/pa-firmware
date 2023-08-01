@@ -56,6 +56,12 @@ typedef enum {
 	DOUT
 } EEPROM_SECTOR_t;
 
+typedef enum{
+	PA_UPDATE,
+	PA_WAIT
+
+}Status_t;
+
 typedef enum MODULE_ID {
 	ID0 = 0x00, ID8 = 0x08, ID9 = 0X09
 } Id_t;
@@ -78,9 +84,9 @@ typedef struct MODULE {
 	uint8_t vswr;
 	uint8_t id;
 	uint8_t function;
-	uint8_t calc_en;
+	Status_t status;
 	ADC_t *adc;
-    MCP4725 *tempSensor;
+    MCP4725 *poutDac;
     UART_t *serial;
     BDA4601_t *attenuator;
     I2C_HandleTypeDef *i2c;

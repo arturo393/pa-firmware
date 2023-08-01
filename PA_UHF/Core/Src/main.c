@@ -116,6 +116,7 @@ void TIM3_IRQHandler(void) {
 		// Calculate and return the average
 		pa->adc->adcMA[adcIdx] = pa->adc->adcSum[adcIdx] / ADC_WINDOW_SIZE;
 	}
+	pa->status = PA_UPDATE;
 }
 
 /*
@@ -193,15 +194,15 @@ int main(void) {
 	pa->attenuator->val = 0;
 	pa->serial = uart(&huart1);
 
-	pa->tempSensor = MCP4725_init(&hi2c1, MCP4706_CHIP_ADDR, REFERENCE_VOLTAGE);
-	/*	float storedVoltage = MCP4725_getVoltage(pa->tempSensor);
-	 float newVoltage = 1.5;
-	 if
-	  (fabs(storedVoltage - newVoltage) > EPSILON) {
-	 MCP4725_setVoltage(pa->tempSensor, newVoltage, MCP4725_EEPROM_MODE,
-	 MCP4725_POWER_DOWN_OFF);
-	 }
-	 */
+	pa->poutDac = MCP4725_init(&hi2c1, MCP4706_CHIP_ADDR, REFERENCE_VOLTAGE);
+//	float storedVoltage = MCP4725_getVoltage(pa->poutDac);
+//	 float newVoltage = 1.5;
+//	 if
+//	  (fabs(storedVoltage - newVoltage) > EPSILON) {
+//	 MCP4725_setVoltage(pa->poutDac, newVoltage, MCP4725_EEPROM_MODE,
+//	 MCP4725_POWER_DOWN_OFF);
+//	 }
+
 	readEepromData(pa, ATTENUATION);
 	setInitialAttenuation(pa->attenuator, STARTING_MILLIS);
 
@@ -213,6 +214,11 @@ int main(void) {
 			ADC_CHANNELS);
 	if (res != HAL_OK)
 		Error_Handler();
+	res = lm75Init(pa->i2c);
+	if (res != HAL_OK)
+		Error_Handler();
+
+
 
 	HAL_UART_Receive_IT(pa->serial->handler, pa->serial->data, UART_SIZE);
 
@@ -220,7 +226,7 @@ int main(void) {
 
 	//i2c1_init();
 //	uart1_init(HS16_CLK, BAUD_RATE, &uart1);
-//	lm75_init();
+	lm75_init();
 //	ds18b20_init();
 	//led_init(&led);
 
@@ -278,14 +284,14 @@ int main(void) {
 
 		processReceivedSerial(pa);
 
-		/*
-		 if (pa->calc_en) {
 
-		 pa->calc_en = false;
-		 ds18b20_convert();
-		 pa->temperature_out = ds18b20_read_temperature();
+		 if (pa->status == PA_UPDATE) {
+
+		 pa->status = PA_WAIT;
+//		 ds18b20_convert();
+//		 pa->temperature_out = ds18b20_read_temperature();
 		 pa->temperature = lm75_read();
-		 pa->pr = arduino_map_int8(pa->adc->adcMA[PREF_CH], MAX4003_ADC_MIN,
+/*		 pa->pr = arduino_map_int8(pa->adc->adcMA[PREF_CH], MAX4003_ADC_MIN,
 		 MAX4003_ADC_MAX, -30, 0);
 		 pa->pout = arduino_map_int8(pa->adc->adcMA[POUT_CH],
 		 MAX4003_ADC_MIN,
@@ -299,9 +305,9 @@ int main(void) {
 		 MAX4003_ADC_MAX, -30, 0);
 		 pa->voltage = ADC_VOLTAGE_FACTOR * pa->adc->adcMA[VOLTAGE_CH]
 		 / 4096.0f;
-
+*/
 		 }
-		 */
+
 		module_pa_state_update(pa);
 		/*
 		 led_current_update(pa->current);

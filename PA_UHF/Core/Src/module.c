@@ -24,7 +24,7 @@ POWER_AMPLIFIER_t* paInit() {
 		p->pout = 0;
 		p->temperature = 0;
 		p->enable = 1;
-		p->calc_en = 1;
+		p->status = PA_WAIT;
 		p->adc = malloc(sizeof(ADC_t));
 		memset(p->adc->adcSum, 0, sizeof(p->adc->adcSum));
 		memset(p->adc->adcSum, 0, sizeof(p->adc->adcMA));
@@ -35,14 +35,8 @@ POWER_AMPLIFIER_t* paInit() {
 		p->attenuator = malloc(sizeof(BDA4601_t));
 
 		}
-
-
-
-
-
 	}
 	return (p);
-
 }
 
 void startTimer3(uint8_t seconds) {
