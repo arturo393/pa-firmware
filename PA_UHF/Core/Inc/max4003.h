@@ -29,6 +29,5 @@ int8_t value;
 
 uint8_t max4003_get_dbm(MAX4003_t *mx,uint16_t value) ;
 bool max4003_check_calibration(uint8_t value);
-float max4003_vswr_calc(int8_t pf, int8_t pr);
 
 #endif /* INC_MAX4003_H_ */

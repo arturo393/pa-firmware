@@ -13,17 +13,39 @@
 #include "stdlib.h"
 #include "string.h"
 
+#define UART_SIZE 30
 #define  RX_BUFFLEN 25
 #define TX_BUFFLEN  100
 #define SECONDS(x) x*1000
 
+typedef enum{
+	READY,
+	NOT_READY
+
+}UART_Status;
+
 typedef struct UART1 {
-	uint8_t *rx_buffer;
-	uint8_t *tx_buffer;
+	uint8_t rx_buffer[RX_BUFFLEN];
+	uint8_t tx_buffer[RX_BUFFLEN];
 	uint8_t rx_count;
 	uint32_t timeout;
+	UART_HandleTypeDef *uart;
 } UART1_t;
 
+typedef struct {
+	uint8_t data[UART_SIZE];
+	uint8_t *txData;
+	uint8_t txSize;
+	uint8_t len;
+	uint32_t operationTimeout;
+	uint8_t isReceivedDataReady;
+	uint8_t isDebugModeEnabled;
+	UART_Status status;
+	UART_HandleTypeDef *handler;
+	uint32_t startTicks;
+} UART_t;
+
+UART_t *uart(UART_HandleTypeDef *uart);
 uint8_t  uart1_clean_by_timeout(UART1_t* uart1,const char* str);
 void uart1_init(uint32_t, uint32_t, UART1_t*);
 void uart1_write(volatile char);

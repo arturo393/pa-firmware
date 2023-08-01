@@ -7,6 +7,16 @@
 
 #include <uart1.h>
 
+UART_t *uart(UART_HandleTypeDef *uart){
+	UART_t * u1;
+	u1 = malloc(sizeof(UART1_t));
+	u1->handler = uart;
+	u1->startTicks = 0;
+	memset(u1->data,0,sizeof(u1->data));
+	u1->status = NOT_READY;
+	return (u1);
+}
+
 uint8_t  uart1_clean_by_timeout(UART1_t* uart1,const char* str){
 		if (HAL_GetTick() - uart1->timeout > SECONDS(5)) {
 			uart1_send_str((char*)str);
@@ -14,9 +24,9 @@ uint8_t  uart1_clean_by_timeout(UART1_t* uart1,const char* str){
 			if(strlen(str)>0)
 				uart1_clean_buffer(uart1);
 			uart1->timeout = HAL_GetTick();
-			return 1;
+			return (1);
 		}
-		return 0;
+		return (0);
 }
 
 void uart1_gpio_init() {
@@ -61,8 +71,7 @@ void uart1_init(uint32_t pclk, uint32_t baud_rate, UART1_t *u) {
 	/* transmitter enable*/
 	USART1->CR1 = USART_CR1_TE | USART_CR1_RE;
 
-	u->rx_buffer = (uint8_t*) malloc(RX_BUFFLEN);
-	u->tx_buffer = (uint8_t*) malloc(TX_BUFFLEN);
+
 	u->rx_count = 0;
 
 	uart1_clean_buffer(u);

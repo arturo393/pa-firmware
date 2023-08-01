@@ -21,6 +21,7 @@ uint8_t ad8363_get_dbm(AD8363_t *ad,uint16_t value) {
 	return (int8_t) (m * (float) value + b);
 }
 
-bool ad8363_check_calibration(uint8_t value){
-	return value != AD8363_IS_CALIBRATED ? true: false;
+uint8_t ad8363_check_calibration(uint8_t value){
+	return ((uint8_t) (value != AD8363_IS_CALIBRATED));
+
 }

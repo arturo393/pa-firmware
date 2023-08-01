@@ -22,4 +22,4 @@ uint16_t min;
 
 
 uint8_t ad8363_get_dbm(AD8363_t *ad,uint16_t value) ;
-bool ad8363_check_calibration(uint8_t value);
+uint8_t ad8363_check_calibration(uint8_t value);

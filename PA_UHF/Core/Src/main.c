@@ -32,14 +32,14 @@
 #include "bda4601.h"
 #include "led.h"
 #include "module.h"
-#include "rs485.h"
 #include "ad8363.h"
 #include "led.h"
 #include "max4003.h"
-#include "adc.h"
 #include "lm75.h"
 #include <m24c64.h>
+#include <rdss.h>
 #include "ds18b20.h"
+#include "MCP4725.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -60,7 +60,11 @@
 ADC_HandleTypeDef hadc1;
 DMA_HandleTypeDef hdma_adc1;
 
+I2C_HandleTypeDef hi2c1;
+
 IWDG_HandleTypeDef hiwdg;
+
+UART_HandleTypeDef huart1;
 
 /* USER CODE BEGIN PV */
 #define SYS_FREQ 64000000
@@ -70,10 +74,7 @@ IWDG_HandleTypeDef hiwdg;
 #define LED_PIN PB1
 #define DE_PIN PA15
 
-Module_t *pa_ptr;
-UART1_t *uart1_ptr;
-ADC_t *adc_ptr;
-void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc);
+POWER_AMPLIFIER_t *pa;
 
 /* USER CODE END PV */
 
@@ -83,41 +84,57 @@ static void MX_GPIO_Init(void);
 static void MX_DMA_Init(void);
 static void MX_ADC1_Init(void);
 static void MX_IWDG_Init(void);
+static void MX_I2C1_Init(void);
+static void MX_USART1_UART_Init(void);
 /* USER CODE BEGIN PFP */
 
 void TIM3_IRQHandler(void) {
 	CLEAR_BIT(TIM3->SR, TIM_SR_UIF);
-	pa_ptr->calc_en = true;
-	HAL_ADC_Start_DMA(&hadc1, (uint32_t*) adc_ptr->dma, CH_NUM);
+
+	for (int adcIdx = 0; adcIdx < ADC_CHANNELS; adcIdx++) {
+		// Subtract oldest value from the sum
+		pa->adc->adcSum[adcIdx] -=
+				pa->adc->adcReadings[adcIdx][pa->adc->adcCounter[adcIdx]];
+
+		// Subtraction overflow check
+		if ((int32_t) pa->adc->adcSum[adcIdx] < 0)
+			pa->adc->adcSum[adcIdx] = 0;
+
+		// Store the new value in the buffer
+		pa->adc->adcReadings[adcIdx][pa->adc->adcCounter[adcIdx]] =
+				pa->adc->adcValues[adcIdx];
+
+		// Add new value to the sum
+		pa->adc->adcSum[adcIdx] += pa->adc->adcValues[adcIdx];
+
+		// Increment the current index and wrap around if necessary
+		pa->adc->adcCounter[adcIdx]++;
+		if (pa->adc->adcCounter[adcIdx] >= ADC_WINDOW_SIZE) {
+			pa->adc->adcCounter[adcIdx] = 0;
+		}
+
+		// Calculate and return the average
+		pa->adc->adcMA[adcIdx] = pa->adc->adcSum[adcIdx] / ADC_WINDOW_SIZE;
+	}
 }
 
-void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc) {
-	adc_ptr->is_dma_ready = true;
-}
+/*
+ void print_adc(UART1_t *u, uint16_t *adc) {
+ sprintf((char*) u->tx_buffer,
+ "Pout %d  \t Gain %u \t Curent %u \t Voltage %u\r\n", adc[POUT_CH],
+ adc[GAIN_CH], adc[CURRENT_CH], adc[VOLTAGE_CH]);
+ uart1_send_frame((char*) u->tx_buffer, TX_BUFFLEN);
+ uart1_clean_buffer(u);
+ }
 
-void USART1_IRQHandler(void) {
-	uart1_read_to_frame(uart1_ptr);
-}
+ */
 
-void print_parameters(UART1_t *u, Module_t m) {
-	sprintf((char*) u->tx_buffer,
-			"Pout %d[dBm] Att %u[dB] Gain %u[dB] Pin %d[dBm] Curent %d[mA] Voltage %u[V]\r\n",
-			m.pout, m.att, m.gain, m.pin, m.current, (uint8_t) m.voltage);
-	uart1_send_frame((char*) u->tx_buffer, TX_BUFFLEN);
-	uart1_clean_buffer(u);
-}
-void print_adc(UART1_t *u, uint16_t *adc) {
-	sprintf((char*) u->tx_buffer,
-			"Pout %d  \t Gain %u \t Curent %u \t Voltage %u\r\n", adc[POUT_i],
-			adc[GAIN_i], adc[CURRENT_i], adc[VOLTAGE_i]);
-	uart1_send_frame((char*) u->tx_buffer, TX_BUFFLEN);
-	uart1_clean_buffer(u);
-}
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-
+// First, create an MCP4725 object:
+uint32_t micro_seconds = 0;
 /* USER CODE END 0 */
 
 /**
@@ -136,11 +153,6 @@ int main(void) {
 
 	/* USER CODE BEGIN Init */
 
-	/* enable clock access ro GPIOA and GPIOB */
-	SET_BIT(RCC->IOPENR, RCC_IOPENR_GPIOAEN);
-	SET_BIT(RCC->IOPENR, RCC_IOPENR_GPIOBEN);
-	SET_BIT(RCC->IOPENR, RCC_IOPENR_GPIOCEN);
-
 	/* PA15 as output */
 	SET_BIT(GPIOA->MODER, GPIO_MODER_MODE15_0);
 	CLEAR_BIT(GPIOA->MODER, GPIO_MODER_MODE15_1);
@@ -151,68 +163,100 @@ int main(void) {
 	SystemClock_Config();
 
 	/* USER CODE BEGIN SysInit */
-	Module_t pa;
-	RS485_t rs485;
-	AD8363_t pout;
-	MAX4003_t pin;
-	MAX4003_t vswr;
-	LED_t led;
-	uint8_t rcv_buff[2];
-	uint8_t send_buff[2];
-	UART1_t uart1;
-	ADC_t adc;
-	adc_ptr = &adc;
-	pa_ptr = &pa;
-	uart1_ptr = &uart1;
 
 	/* USER CODE END SysInit */
 
 	/* Initialize all configured peripherals */
-//	MX_GPIO_Init();
+	MX_GPIO_Init();
 	MX_DMA_Init();
 	MX_ADC1_Init();
-
 //  MX_IWDG_Init();
+	MX_I2C1_Init();
+	MX_USART1_UART_Init();
 	/* USER CODE BEGIN 2 */
 
-	module_init(&pa, POWER_AMPLIFIER, ID8);
+	HAL_StatusTypeDef res;
 
-	i2c1_init();
-	uart1_init(HS16_CLK, BAUD_RATE, &uart1);
-	lm75_init();
-	rs485_init(&rs485);
-	ds18b20_init();
-	adc_init(&adc);
-	led_init(&led);
-	m24c64_read_N(BASE_ADDR, &(pa.att), ATT_VALUE_ADDR, 1);
+//	res = HAL_TIM_Base_Start(&htim1);
+//	if (res != HAL_OK)
+//		Error_Handler();
+//	LED_t led;
+	pa = paInit();
+	HAL_GPIO_WritePin(PA_HAB_GPIO_Port, PA_HAB_Pin, GPIO_PIN_RESET);
+	pa->i2c = &hi2c1;
+	pa->attenuator->clkPin = CLK_ATT_Pin;
+	pa->attenuator->clkPort = CLK_ATT_GPIO_Port;
+	pa->attenuator->dataPin = DATA_ATT_Pin;
+	pa->attenuator->dataPort = DATA_ATT_GPIO_Port;
+	pa->attenuator->lePin = LE_ATT_Pin;
+	pa->attenuator->lePort = LE_ATT_GPIO_Port;
+	pa->attenuator->val = 0;
+	pa->serial = uart(&huart1);
 
-	bda4601_init(pa.att);
+	pa->tempSensor = MCP4725_init(&hi2c1, MCP4706_CHIP_ADDR, REFERENCE_VOLTAGE);
+	/*	float storedVoltage = MCP4725_getVoltage(pa->tempSensor);
+	 float newVoltage = 1.5;
+	 if
+	  (fabs(storedVoltage - newVoltage) > EPSILON) {
+	 MCP4725_setVoltage(pa->tempSensor, newVoltage, MCP4725_EEPROM_MODE,
+	 MCP4725_POWER_DOWN_OFF);
+	 }
+	 */
+	readEepromData(pa, ATTENUATION);
+	setInitialAttenuation(pa->attenuator, STARTING_MILLIS);
 
-	m24c64_init_16uvalue(POUT_MAX_READY_ADDR, AD8363_ADC_MAX);
-	m24c64_init_16uvalue(POUT_MIN_READY_ADDR, AD8363_ADC_MIN);
-	m24c64_init_16uvalue(PIN_MAX_READY_ADDR, MAX4003_ADC_MAX);
-	m24c64_init_16uvalue(PIN_MIN_READY_ADDR, MAX4003_ADC_MIN);
-	m24c64_init_16uvalue(VSWR_MAX_READY_ADDR, MAX4003_ADC_MAX);
-	m24c64_init_16uvalue(VSWR_MIN_READY_ADDR, MAX4003_ADC_MIN);
+	res = HAL_ADCEx_Calibration_Start(&hadc1);
+	if (res != HAL_OK)
+		Error_Handler();
 
-	m24c64_read_N(BASE_ADDR, rcv_buff, POUT_ADC_MIN_ADDR_0, 2);
-	pout.min = (rcv_buff[0] << 8) | (rcv_buff[1] & 0xff);
+	res = HAL_ADC_Start_DMA(&hadc1, (uint32_t*) pa->adc->adcValues,
+			ADC_CHANNELS);
+	if (res != HAL_OK)
+		Error_Handler();
 
-	m24c64_read_N(BASE_ADDR, rcv_buff, POUT_ADC_MAX_ADDR_0, 2);
-	pout.max = (rcv_buff[0] << 8) | (rcv_buff[1] & 0xff);
+	HAL_UART_Receive_IT(pa->serial->handler, pa->serial->data, UART_SIZE);
 
-	m24c64_read_N(BASE_ADDR, rcv_buff, PIN_ADC_MIN_ADDR_0, 2);
-	pin.min = (rcv_buff[0] << 8) | (rcv_buff[1] & 0xff);
+	// Second, initilaize the MCP4725 object:
 
-	m24c64_read_N(BASE_ADDR, rcv_buff, PIN_ADC_MAX_ADDR_0, 2);
-	pin.max = (rcv_buff[0] << 8) | (rcv_buff[1] & 0xff);
+	//i2c1_init();
+//	uart1_init(HS16_CLK, BAUD_RATE, &uart1);
+//	lm75_init();
+//	ds18b20_init();
+	//led_init(&led);
 
-	m24c64_read_N(BASE_ADDR, rcv_buff, VSWR_ADC_MIN_ADDR_0, 2);
-	vswr.min = (rcv_buff[0] << 8) | (rcv_buff[1] & 0xff);
+//	readPage(BASE_ADDR, &(pa->att), ATT_VALUE_ADDR, 1);
 
-	m24c64_read_N(BASE_ADDR, rcv_buff, VSWR_ADC_MAX_ADDR_0, 2);
-	vswr.max = (rcv_buff[0] << 8) | (rcv_buff[1] & 0xff);
+//	bda4601_init(pa->att);
+	/*
+	 m24c64_init_16uvalue(POUT_MAX_READY_ADDR, AD8363_ADC_MAX);
+	 m24c64_init_16uvalue(POUT_MIN_READY_ADDR, AD8363_ADC_MIN);
+	 m24c64_init_16uvalue(PIN_MAX_READY_ADDR, MAX4003_ADC_MAX);
+	 m24c64_init_16uvalue(PIN_MIN_READY_ADDR, MAX4003_ADC_MIN);
+	 m24c64_init_16uvalue(VSWR_MAX_READY_ADDR, MAX4003_ADC_MAX);
+	 m24c64_init_16uvalue(VSWR_MIN_READY_ADDR, MAX4003_ADC_MIN);
 
+	 readPage(BASE_ADDR, rcv_buff, POUT_ADC_MIN_ADDR_0, 2);
+	 pout.min = (rcv_buff[0] << 8) | (rcv_buff[1] & 0xff);
+
+	 readPage(BASE_ADDR, rcv_buff, POUT_ADC_MAX_ADDR_0, 2);
+	 pout.max = (rcv_buff[0] << 8) | (rcv_buff[1] & 0xff);
+
+	 readPage(BASE_ADDR, rcv_buff, PIN_ADC_MIN_ADDR_0, 2);
+	 pin.min = (rcv_buff[0] << 8) | (rcv_buff[1] & 0xff);
+
+	 readPage(BASE_ADDR, rcv_buff, PIN_ADC_MAX_ADDR_0, 2);
+	 pin.max = (rcv_buff[0] << 8) | (rcv_buff[1] & 0xff);
+
+	 readPage(BASE_ADDR, rcv_buff, VSWR_ADC_MIN_ADDR_0, 2);
+	 vswr.min = (rcv_buff[0] << 8) | (rcv_buff[1] & 0xff);
+
+	 readPage(BASE_ADDR, rcv_buff, VSWR_ADC_MAX_ADDR_0, 2);
+	 vswr.max = (rcv_buff[0] << 8) | (rcv_buff[1] & 0xff);
+
+	 */
+	//i2c1_byte_tx(MCP4706_CHIP_ADDR, buff, 2);
+	startTimer3(1);
+	// Check the connection:
 	/* USER CODE END 2 */
 
 	/* Infinite loop */
@@ -222,110 +266,53 @@ int main(void) {
 
 		/* USER CODE BEGIN 3 */
 
-		rs485_update_status_by_uart(&rs485, &uart1);
-
-		switch (rs485.cmd) {
-		case QUERY_PARAMETER_LTEL:
-			rs485.len = 14;
-			rs485.frame = (uint8_t*) malloc(14);
-			uart1_send_frame((char*) rs485.frame, 14);
-			free(rs485.frame);
-			rs485.cmd = NONE;
-			break;
-		case QUERY_PARAMETER_STR:
-			print_parameters(&uart1, pa);
-			rs485.cmd = NONE;
-			break;
-		case QUERY_ADC:
-			print_adc(&uart1, adc.media);
-			rs485.cmd = NONE;
-			break;
-		case QUERY_PARAMETER_SIGMA:
-			rs485_set_query_frame(&rs485, &pa);
-			uart1_send_frame((char*) rs485.frame, 14);
-			rs485.cmd = NONE;
-			break;
-		case SET_ATT_LTEL:
-			pa.att = uart1.rx_buffer[6];
-			bda4601_set_att(pa.att, 3);
-			send_buff[0] = pa.att;
-			m24c64_write_N(BASE_ADDR, send_buff, ATT_VALUE_ADDR, 1);
-			sprintf((char*) uart1.tx_buffer, "Attenuation %u\r\n", pa.att);
-			uart1_send_frame((char*) uart1.tx_buffer, TX_BUFFLEN);
-			rs485.cmd = NONE;
-			break;
-		case SET_POUT_MAX:
-			pout.max = adc.media[POUT_i];
-			m24c64_store_16uvalue(POUT_MAX_READY_ADDR, pout.max);
-			uart1_send_str("Saved Pout max value\n\r");
-			rs485.cmd = NONE;
-			break;
-		case SET_POUT_MIN:
-			pout.min = adc.media[POUT_i];
-			m24c64_store_16uvalue(POUT_MIN_READY_ADDR, pout.min);
-			uart1_send_str("Saved Pout min value\n\r");
-			rs485.cmd = NONE;
-			break;
-		case SET_PIN_MAX:
-			pin.max = adc.media[PIN_i];
-			m24c64_store_16uvalue(PIN_MAX_READY_ADDR, pin.max);
-			uart1_send_str("Saved Pin max value\n\r");
-			rs485.cmd = NONE;
-			break;
-		case SET_PIN_MIN:
-			pin.min = adc.media[PIN_i];
-			m24c64_store_16uvalue(PIN_MAX_READY_ADDR, pin.min);
-			uart1_send_str("Saved Pin min value\n\r");
-			rs485.cmd = NONE;
-			break;
-		case SET_VSWR_MAX:
-			vswr.max = adc.media[VSWR_i];
-			m24c64_store_16uvalue(VSWR_MIN_READY_ADDR, vswr.max);
-			uart1_send_str("Saved VSWR max value\n\r");
-			rs485.cmd = NONE;
-			break;
-		case SET_VSWR_MIN:
-			vswr.min = adc.media[VSWR_i];
-			m24c64_store_16uvalue(VSWR_MAX_READY_ADDR, vswr.min);
-			uart1_send_str("Saved Pout min value\n\r");
-			rs485.cmd = NONE;
-			break;
-		case SET_ENABLE_PA:
-			pa.enable = uart1.rx_buffer[5] == 1 ? ON : OFF;
-			rs485.cmd = NONE;
-			break;
-		default:
-			rs485.cmd = NONE;
-			break;
+		if (HAL_GetTick() - pa->serial->startTicks > 5000) {
+			HAL_UART_DeInit(pa->serial->handler);
+			HAL_Delay(1);
+			MX_USART1_UART_Init();
+			HAL_UART_Init(pa->serial->handler); // Enable USART2
+			pa->serial->startTicks = HAL_GetTick();
+			HAL_UART_Receive_IT(pa->serial->handler, pa->serial->data,
+			UART_SIZE);
 		}
 
-		if (adc.is_dma_ready) {
-			adc.is_dma_ready = false;
-			adc_media_movil_calc(&adc);
-			adc_samples_update(&adc);
-		}
+		processReceivedSerial(pa);
 
-		if (pa.calc_en) {
-			pa.calc_en = false;
-			ds18b20_convert();
-			pa.temperature_out = ds18b20_read_temperature();
-			pa.temperature = lm75_read();
-			pa.pr = max4003_get_dbm(&vswr, adc.media[VSWR_i]);
-			pa.pout = ad8363_get_dbm(&pout, adc.media[POUT_i]);
-			pa.current = ADC_CURRENT_FACTOR * adc.media[CURRENT_i] / 4096.0f;
-			pa.gain = adc_gain_calc(adc.media[GAIN_i]);
-			pa.vswr = max4003_vswr_calc(pa.pout, pa.pr);
-			pa.pin = max4003_get_dbm(&pin, adc.media[PIN_i]);
-			pa.voltage = ADC_VOLTAGE_FACTOR * adc.media[VOLTAGE_i] / 4096.0f;
-		}
+		/*
+		 if (pa->calc_en) {
 
-		module_pa_state_update(&pa);
+		 pa->calc_en = false;
+		 ds18b20_convert();
+		 pa->temperature_out = ds18b20_read_temperature();
+		 pa->temperature = lm75_read();
+		 pa->pr = arduino_map_int8(pa->adc->adcMA[PREF_CH], MAX4003_ADC_MIN,
+		 MAX4003_ADC_MAX, -30, 0);
+		 pa->pout = arduino_map_int8(pa->adc->adcMA[POUT_CH],
+		 MAX4003_ADC_MIN,
+		 MAX4003_ADC_MAX, -30, 0);
+		 pa->current = ADC_CURRENT_FACTOR * pa->adc->adcMA[CURRENT_CH]
+		 / 4096.0f;
+		 pa->gain = arduino_map_int8(pa->adc->adcMA[PIN_CH], MAX4003_ADC_MIN,
+		 MAX4003_ADC_MAX, 0, 30);
+		 pa->vswr = vswr_calc(pa->pout, pa->pr);
+		 pa->pin = arduino_map_int8(pa->adc->adcMA[PIN_CH], MAX4003_ADC_MIN,
+		 MAX4003_ADC_MAX, -30, 0);
+		 pa->voltage = ADC_VOLTAGE_FACTOR * pa->adc->adcMA[VOLTAGE_CH]
+		 / 4096.0f;
 
-		led_current_update(pa.current);
-		led_enable_kalive(&led);
-		led_temperature_update(pa.temperature);
-		/* USER CODE END 3 */
+		 }
+		 */
+		module_pa_state_update(pa);
+		/*
+		 led_current_update(pa->current);
+		 led_enable_kalive(&led);
+		 led_temperature_update(pa->temperature);
+		 */
+		/* USER CODE END WHILE */
+
+		/* USER CODE BEGIN 3 */
 	}
+	/* USER CODE END 3 */
 }
 
 /**
@@ -392,18 +379,19 @@ static void MX_ADC1_Init(void) {
 	/** Configure the global features of the ADC (Clock, Resolution, Data Alignment and number of conversion)
 	 */
 	hadc1.Instance = ADC1;
-	hadc1.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV2;
+	hadc1.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV4;
 	hadc1.Init.Resolution = ADC_RESOLUTION_12B;
 	hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
 	hadc1.Init.ScanConvMode = ADC_SCAN_ENABLE;
-	hadc1.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
+	hadc1.Init.EOCSelection = ADC_EOC_SEQ_CONV;
 	hadc1.Init.LowPowerAutoWait = DISABLE;
 	hadc1.Init.LowPowerAutoPowerOff = DISABLE;
 	hadc1.Init.ContinuousConvMode = ENABLE;
 	hadc1.Init.NbrOfConversion = 7;
+	hadc1.Init.DiscontinuousConvMode = DISABLE;
 	hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
 	hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
-	hadc1.Init.DMAContinuousRequests = DISABLE;
+	hadc1.Init.DMAContinuousRequests = ENABLE;
 	hadc1.Init.Overrun = ADC_OVR_DATA_PRESERVED;
 	hadc1.Init.SamplingTimeCommon1 = ADC_SAMPLETIME_160CYCLES_5;
 	hadc1.Init.SamplingTimeCommon2 = ADC_SAMPLETIME_160CYCLES_5;
@@ -476,6 +464,51 @@ static void MX_ADC1_Init(void) {
 }
 
 /**
+ * @brief I2C1 Initialization Function
+ * @param None
+ * @retval None
+ */
+static void MX_I2C1_Init(void) {
+
+	/* USER CODE BEGIN I2C1_Init 0 */
+
+	/* USER CODE END I2C1_Init 0 */
+
+	/* USER CODE BEGIN I2C1_Init 1 */
+
+	/* USER CODE END I2C1_Init 1 */
+	hi2c1.Instance = I2C1;
+	hi2c1.Init.Timing = 0x00303D5B;
+	hi2c1.Init.OwnAddress1 = 0;
+	hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
+	hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
+	hi2c1.Init.OwnAddress2 = 0;
+	hi2c1.Init.OwnAddress2Masks = I2C_OA2_NOMASK;
+	hi2c1.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
+	hi2c1.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
+	if (HAL_I2C_Init(&hi2c1) != HAL_OK) {
+		Error_Handler();
+	}
+
+	/** Configure Analogue filter
+	 */
+	if (HAL_I2CEx_ConfigAnalogFilter(&hi2c1, I2C_ANALOGFILTER_ENABLE)
+			!= HAL_OK) {
+		Error_Handler();
+	}
+
+	/** Configure Digital filter
+	 */
+	if (HAL_I2CEx_ConfigDigitalFilter(&hi2c1, 0) != HAL_OK) {
+		Error_Handler();
+	}
+	/* USER CODE BEGIN I2C1_Init 2 */
+
+	/* USER CODE END I2C1_Init 2 */
+
+}
+
+/**
  * @brief IWDG Initialization Function
  * @param None
  * @retval None
@@ -503,6 +536,51 @@ static void MX_IWDG_Init(void) {
 }
 
 /**
+ * @brief USART1 Initialization Function
+ * @param None
+ * @retval None
+ */
+static void MX_USART1_UART_Init(void) {
+
+	/* USER CODE BEGIN USART1_Init 0 */
+
+	/* USER CODE END USART1_Init 0 */
+
+	/* USER CODE BEGIN USART1_Init 1 */
+
+	/* USER CODE END USART1_Init 1 */
+	huart1.Instance = USART1;
+	huart1.Init.BaudRate = 115200;
+	huart1.Init.WordLength = UART_WORDLENGTH_8B;
+	huart1.Init.StopBits = UART_STOPBITS_1;
+	huart1.Init.Parity = UART_PARITY_NONE;
+	huart1.Init.Mode = UART_MODE_TX_RX;
+	huart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+	huart1.Init.OverSampling = UART_OVERSAMPLING_16;
+	huart1.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
+	huart1.Init.ClockPrescaler = UART_PRESCALER_DIV1;
+	huart1.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
+	if (HAL_UART_Init(&huart1) != HAL_OK) {
+		Error_Handler();
+	}
+	if (HAL_UARTEx_SetTxFifoThreshold(&huart1, UART_TXFIFO_THRESHOLD_1_8)
+			!= HAL_OK) {
+		Error_Handler();
+	}
+	if (HAL_UARTEx_SetRxFifoThreshold(&huart1, UART_RXFIFO_THRESHOLD_1_8)
+			!= HAL_OK) {
+		Error_Handler();
+	}
+	if (HAL_UARTEx_DisableFifoMode(&huart1) != HAL_OK) {
+		Error_Handler();
+	}
+	/* USER CODE BEGIN USART1_Init 2 */
+
+	/* USER CODE END USART1_Init 2 */
+
+}
+
+/**
  * Enable DMA controller clock
  */
 static void MX_DMA_Init(void) {
@@ -524,6 +602,8 @@ static void MX_DMA_Init(void) {
  */
 static void MX_GPIO_Init(void) {
 	GPIO_InitTypeDef GPIO_InitStruct = { 0 };
+	/* USER CODE BEGIN MX_GPIO_Init_1 */
+	/* USER CODE END MX_GPIO_Init_1 */
 
 	/* GPIO Ports Clock Enable */
 	__HAL_RCC_GPIOB_CLK_ENABLE();
@@ -540,15 +620,7 @@ static void MX_GPIO_Init(void) {
 			GPIO_PIN_RESET);
 
 	/*Configure GPIO pin Output Level */
-	HAL_GPIO_WritePin(SYS_RP_GPIO_Port, SYS_RP_Pin, GPIO_PIN_RESET);
-
-	/*Configure GPIO pins : PB9 PB8 */
-	GPIO_InitStruct.Pin = GPIO_PIN_9 | GPIO_PIN_8;
-	GPIO_InitStruct.Mode = GPIO_MODE_AF_OD;
-	GPIO_InitStruct.Pull = GPIO_NOPULL;
-	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-	GPIO_InitStruct.Alternate = GPIO_AF6_I2C1;
-	HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+	HAL_GPIO_WritePin(GPIOC, GPIO_PIN_6, GPIO_PIN_RESET);
 
 	/*Configure GPIO pins : PA_HAB_Pin LE_ATT_Pin TEMP_HIGH_Pin TEMP_OK_Pin
 	 CURR_H_Pin CURR_N_Pin CURR_L_Pin */
@@ -566,21 +638,15 @@ static void MX_GPIO_Init(void) {
 	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
 	HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-	/*Configure GPIO pin : SYS_RP_Pin */
-	GPIO_InitStruct.Pin = SYS_RP_Pin;
+	/*Configure GPIO pin : PC6 */
+	GPIO_InitStruct.Pin = GPIO_PIN_6;
 	GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
 	GPIO_InitStruct.Pull = GPIO_NOPULL;
 	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-	HAL_GPIO_Init(SYS_RP_GPIO_Port, &GPIO_InitStruct);
+	HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
-	/*Configure GPIO pins : PB6 PB7 */
-	GPIO_InitStruct.Pin = GPIO_PIN_6 | GPIO_PIN_7;
-	GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
-	GPIO_InitStruct.Pull = GPIO_NOPULL;
-	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-	GPIO_InitStruct.Alternate = GPIO_AF0_USART1;
-	HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-
+	/* USER CODE BEGIN MX_GPIO_Init_2 */
+	/* USER CODE END MX_GPIO_Init_2 */
 }
 
 /* USER CODE BEGIN 4 */

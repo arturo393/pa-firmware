@@ -11,26 +11,28 @@
 #include "main.h"
 #include "stdbool.h"
 
+#define adc_start_conversion() SET_BIT(ADC1->CR,ADC_CR_ADSTART)
 #define SAMPLES  20
-#define CH_NUM 7
+#define ADC_WINDOW_SIZE 20
 
-typedef enum ADC_INDEX {
-	GAIN_i, CURRENT_i, VOLTAGE_i, VSWR_i, POUT_i, PIN_i, TEMP_i
-} ADC_INDEX_t;
+extern const float ADC_CURRENT_FACTOR;
+extern const float ADC_VOLTAGE_FACTOR;
 
-static const float ADC_CURRENT_FACTOR = 298.1818182f;
-static const float ADC_VOLTAGE_FACTOR = 0.007404330f;
+
+typedef enum {
+	GAIN_CH, CURRENT_CH, VOLTAGE_CH, PREF_CH, POUT_CH, PIN_CH, TEMPERATURE_CH,ADC_CHANNELS
+} ADC_CHANNEL_t;
+
 
 typedef struct ADC_t {
-	volatile uint16_t dma[CH_NUM];
-	uint16_t read[CH_NUM][SAMPLES];
-	uint16_t media[CH_NUM];
-	int32_t sum[CH_NUM];
-	uint8_t samples;
-	bool is_dma_ready;
+	uint32_t adcValues[ADC_CHANNELS];
+	uint8_t adcCounter[ADC_CHANNELS];
+	uint16_t adcReadings[ADC_CHANNELS][ADC_WINDOW_SIZE];
+	uint16_t adcMA[ADC_CHANNELS];
+	uint16_t adcSum[ADC_CHANNELS];
 } ADC_t;
 
-#define adc_start_conversion() SET_BIT(ADC1->CR,ADC_CR_ADSTART)
+
 void adc_init(ADC_t* adc);
 void adc_samples_update(ADC_t *adc);
 uint8_t adc_gain_calc(uint16_t adc_gain);

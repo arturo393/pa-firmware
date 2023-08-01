@@ -1,61 +1,93 @@
 #include <m24c64.h>
 
-void m24c64_page_read(uint8_t address, uint8_t page, uint8_t *data) {
-	uint8_t buff[2] = { 0 };
-	uint16_t MemAddress = page << PADDRPOSITION;
 
-	buff[0] = MemAddress >> 8;
-	buff[1] = MemAddress & 0xff;
 
-	i2c1_byte_tx(CHIP_ADDR, buff, 2);
-	i2c1_buffReceive(CHIP_ADDR, data, 32);
+HAL_StatusTypeDef saveByte(I2C_HandleTypeDef *i2c, uint8_t page, uint8_t *data,
+		uint8_t offset) {
+	return (savePage(i2c, page, data, offset, 1));
 }
 
-void m24c64_read_N(uint8_t page, uint8_t *data, uint8_t offset, uint8_t size) {
-	uint8_t buff[2] = { 0 };
+uint8_t readByte(I2C_HandleTypeDef *i2c, uint8_t page, uint8_t offset) {
+	HAL_StatusTypeDef res;
+	uint8_t data = 0;
+	res = readPage(i2c, page, &data, offset, 1);
+	if (res != HAL_OK)
+		return (-1);
+	return (data);
+}
+
+HAL_StatusTypeDef save2Byte(I2C_HandleTypeDef *i2c, uint8_t page, uint8_t *data,
+		uint8_t offset) {
+	return (savePage(i2c, page, data, offset, sizeof(uint16_t)));
+}
+
+HAL_StatusTypeDef save4Byte(I2C_HandleTypeDef *i2c, uint8_t page, uint8_t *data,
+		uint8_t offset) {
+	return (savePage(i2c, page, data, offset, sizeof(uint32_t)));
+}
+
+uint32_t read4Byte(I2C_HandleTypeDef *i2c, uint8_t page, uint8_t offset) {
+	HAL_StatusTypeDef res;
+	uint32_t data = 0;
+	res = readPage(i2c, page, (uint8_t*) &data, offset, 4);
+	if (res != HAL_OK)
+		return (-1);
+	return (data);
+}
+
+uint16_t read2Byte(I2C_HandleTypeDef *i2c, uint8_t page, uint8_t offset) {
+	HAL_StatusTypeDef res;
+	uint32_t data = 0;
+	res = readPage(i2c, page, (uint8_t*) &data, offset, 2);
+	if (res != HAL_OK)
+		return (-1);
+	return (data);
+}
+
+
+HAL_StatusTypeDef readPage(I2C_HandleTypeDef *i2c, uint8_t page, uint8_t *data,
+		uint8_t offset, uint8_t size) {
+	uint8_t buff[1] = { 0 };
 	uint16_t MemAddress = page << PADDRPOSITION | offset;
+	buff[0] = (uint8_t) MemAddress & 0xff;
+	HAL_StatusTypeDef res;
 
-	buff[0] = MemAddress >> 8;
-	buff[1] = MemAddress & 0xff;
+	res = HAL_I2C_Master_Transmit(i2c, EEPROM_ADDR, buff, 1, 200);
 
-	i2c1_byte_tx(CHIP_ADDR, buff, 2);
-	i2c1_buffReceive(CHIP_ADDR, data, size);
+	if (res != HAL_OK)
+		return (res);
+
+	HAL_Delay(5);
+	res = HAL_I2C_Master_Receive(i2c, EEPROM_ADDR, data, size, 200);
+	if (res != HAL_OK)
+		return (res);
+
+	return (res);
 }
 
-void m24c64_write_N(uint8_t page, uint8_t *data, uint8_t offset, uint8_t size) {
-	uint8_t buff[size + 2];
-	uint8_t read[size];
+HAL_StatusTypeDef savePage(I2C_HandleTypeDef *i2c, uint8_t page, uint8_t *data,
+		uint8_t offset, uint8_t size) {
+	uint8_t buff[16 + 1];
+	uint8_t read[16];
+	uint8_t i = 0;
+	HAL_StatusTypeDef res;
+	res = readPage(i2c, page, read, offset, size);
+	uint8_t notEqual = 0;
 
-	m24c64_read_N(page, read, offset, size);
-
-//	HAL_Delay(5);
-	if (strncmp((const char*) data, (const char*) read, (size_t) size)) {
-		buff[0] = (page << PADDRPOSITION | offset) >> 8;
-		buff[1] = (page << PADDRPOSITION | offset) & 0xff;
-		for (int i = 0; i < size; i++) {
-			buff[i + 2] = data[i];
+	for (i = 0; i < size; i++)
+		if (data[i] != read[i]) {
+			notEqual = 1;
+			break;
 		}
-		i2c1_byte_tx(CHIP_ADDR, buff, size + 2);
+
+	if (notEqual == 1) {
+		buff[0] = (uint8_t) (page << PADDRPOSITION | offset) & 0xff;
+		for (i = 0; i < size; i++) {
+			buff[i + 1] = data[i];
+		}
+		res = HAL_I2C_Master_Transmit(i2c, EEPROM_ADDR, buff, 1, 200);
 	}
 	HAL_Delay(6);
-}
 
-void m24c64_init_16uvalue(M24C64_ADDR_t addr, uint16_t value) {
-	uint8_t buff[2];
-	m24c64_read_N(BASE_ADDR, buff, addr, 1);
-	if (!(buff[0] == IS_READY)) {
-		buff[0] = value >> 8;
-		buff[1] = value & 0xff;
-		m24c64_write_N(BASE_ADDR, buff, addr + 1, 2);
-	}
+	return (res);
 }
-
-void m24c64_store_16uvalue(M24C64_ADDR_t addr, uint16_t value) {
-	uint8_t buff[2];
-	buff[0] = value >> 8;
-	buff[1] = value & 0xff;
-	m24c64_write_N(BASE_ADDR, buff, addr + 1, 2);
-	buff[0] = addr;
-	m24c64_write_N(BASE_ADDR, buff, addr, 1);
-}
-
