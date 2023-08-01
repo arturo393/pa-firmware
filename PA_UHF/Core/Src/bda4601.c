@@ -77,7 +77,6 @@ void bda4601_set_initial_att(uint8_t value, uint16_t period_millis) {
 		}
 		HAL_Delay(t_step);
 	}
-
 }
 
 void setInitialAttenuation(BDA4601_t *b, uint16_t millis) {

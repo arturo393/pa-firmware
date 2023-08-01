@@ -25,16 +25,6 @@ POWER_AMPLIFIER_t* paInit() {
 		p->temperature = 0;
 		p->enable = 1;
 		p->status = PA_WAIT;
-		p->adc = malloc(sizeof(ADC_t));
-		memset(p->adc->adcSum, 0, sizeof(p->adc->adcSum));
-		memset(p->adc->adcSum, 0, sizeof(p->adc->adcMA));
-		memset(p->adc->adcCounter, 0, sizeof(p->adc->adcCounter));
-		for (int adcIdx = 0; adcIdx < ADC_CHANNELS; adcIdx++) {
-			memset(p->adc->adcReadings[adcIdx], 0,
-					sizeof(p->adc->adcReadings[adcIdx]));
-		p->attenuator = malloc(sizeof(BDA4601_t));
-
-		}
 	}
 	return (p);
 }

@@ -58,7 +58,6 @@
 
 /* Private variables ---------------------------------------------------------*/
 ADC_HandleTypeDef hadc1;
-DMA_HandleTypeDef hdma_adc1;
 
 I2C_HandleTypeDef hi2c1;
 
@@ -81,7 +80,6 @@ POWER_AMPLIFIER_t *pa;
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
-static void MX_DMA_Init(void);
 static void MX_ADC1_Init(void);
 static void MX_IWDG_Init(void);
 static void MX_I2C1_Init(void);
@@ -90,32 +88,6 @@ static void MX_USART1_UART_Init(void);
 
 void TIM3_IRQHandler(void) {
 	CLEAR_BIT(TIM3->SR, TIM_SR_UIF);
-
-	for (int adcIdx = 0; adcIdx < ADC_CHANNELS; adcIdx++) {
-		// Subtract oldest value from the sum
-		pa->adc->adcSum[adcIdx] -=
-				pa->adc->adcReadings[adcIdx][pa->adc->adcCounter[adcIdx]];
-
-		// Subtraction overflow check
-		if ((int32_t) pa->adc->adcSum[adcIdx] < 0)
-			pa->adc->adcSum[adcIdx] = 0;
-
-		// Store the new value in the buffer
-		pa->adc->adcReadings[adcIdx][pa->adc->adcCounter[adcIdx]] =
-				pa->adc->adcValues[adcIdx];
-
-		// Add new value to the sum
-		pa->adc->adcSum[adcIdx] += pa->adc->adcValues[adcIdx];
-
-		// Increment the current index and wrap around if necessary
-		pa->adc->adcCounter[adcIdx]++;
-		if (pa->adc->adcCounter[adcIdx] >= ADC_WINDOW_SIZE) {
-			pa->adc->adcCounter[adcIdx] = 0;
-		}
-
-		// Calculate and return the average
-		pa->adc->adcMA[adcIdx] = pa->adc->adcSum[adcIdx] / ADC_WINDOW_SIZE;
-	}
 	pa->status = PA_UPDATE;
 }
 
@@ -154,10 +126,6 @@ int main(void) {
 
 	/* USER CODE BEGIN Init */
 
-	/* PA15 as output */
-	SET_BIT(GPIOA->MODER, GPIO_MODER_MODE15_0);
-	CLEAR_BIT(GPIOA->MODER, GPIO_MODER_MODE15_1);
-
 	/* USER CODE END Init */
 
 	/* Configure the system clock */
@@ -169,8 +137,7 @@ int main(void) {
 
 	/* Initialize all configured peripherals */
 	MX_GPIO_Init();
-	MX_DMA_Init();
-	MX_ADC1_Init();
+//  MX_ADC1_Init();
 //  MX_IWDG_Init();
 	MX_I2C1_Init();
 	MX_USART1_UART_Init();
@@ -185,6 +152,18 @@ int main(void) {
 	pa = paInit();
 	HAL_GPIO_WritePin(PA_HAB_GPIO_Port, PA_HAB_Pin, GPIO_PIN_RESET);
 	pa->i2c = &hi2c1;
+
+	pa->adc = malloc(sizeof(ADC_t));
+	memset(pa->adc->adcSum, 0, sizeof(pa->adc->adcSum));
+	memset(pa->adc->adcSum, 0, sizeof(pa->adc->adcMA));
+	memset(pa->adc->adcCounter, 0, sizeof(pa->adc->adcCounter));
+	for (int adcIdx = 0; adcIdx < ADC_CHANNELS; adcIdx++) {
+		memset(pa->adc->adcReadings[adcIdx], 0,
+				sizeof(pa->adc->adcReadings[adcIdx]));
+	}
+	pa->adc->reg = ADC1;
+	ADC1->IER |= ADC_IER_EOCIE;
+	pa->attenuator = malloc(sizeof(BDA4601_t));
 	pa->attenuator->clkPin = CLK_ATT_Pin;
 	pa->attenuator->clkPort = CLK_ATT_GPIO_Port;
 	pa->attenuator->dataPin = DATA_ATT_Pin;
@@ -192,6 +171,7 @@ int main(void) {
 	pa->attenuator->lePin = LE_ATT_Pin;
 	pa->attenuator->lePort = LE_ATT_GPIO_Port;
 	pa->attenuator->val = 0;
+
 	pa->serial = uart(&huart1);
 
 	pa->poutDac = MCP4725_init(&hi2c1, MCP4706_CHIP_ADDR, REFERENCE_VOLTAGE);
@@ -206,19 +186,9 @@ int main(void) {
 	readEepromData(pa, ATTENUATION);
 	setInitialAttenuation(pa->attenuator, STARTING_MILLIS);
 
-	res = HAL_ADCEx_Calibration_Start(&hadc1);
-	if (res != HAL_OK)
-		Error_Handler();
-
-	res = HAL_ADC_Start_DMA(&hadc1, (uint32_t*) pa->adc->adcValues,
-			ADC_CHANNELS);
-	if (res != HAL_OK)
-		Error_Handler();
 	res = lm75Init(pa->i2c);
 	if (res != HAL_OK)
 		Error_Handler();
-
-
 
 	HAL_UART_Receive_IT(pa->serial->handler, pa->serial->data, UART_SIZE);
 
@@ -229,39 +199,10 @@ int main(void) {
 	lm75_init();
 //	ds18b20_init();
 	//led_init(&led);
-
-//	readPage(BASE_ADDR, &(pa->att), ATT_VALUE_ADDR, 1);
-
-//	bda4601_init(pa->att);
-	/*
-	 m24c64_init_16uvalue(POUT_MAX_READY_ADDR, AD8363_ADC_MAX);
-	 m24c64_init_16uvalue(POUT_MIN_READY_ADDR, AD8363_ADC_MIN);
-	 m24c64_init_16uvalue(PIN_MAX_READY_ADDR, MAX4003_ADC_MAX);
-	 m24c64_init_16uvalue(PIN_MIN_READY_ADDR, MAX4003_ADC_MIN);
-	 m24c64_init_16uvalue(VSWR_MAX_READY_ADDR, MAX4003_ADC_MAX);
-	 m24c64_init_16uvalue(VSWR_MIN_READY_ADDR, MAX4003_ADC_MIN);
-
-	 readPage(BASE_ADDR, rcv_buff, POUT_ADC_MIN_ADDR_0, 2);
-	 pout.min = (rcv_buff[0] << 8) | (rcv_buff[1] & 0xff);
-
-	 readPage(BASE_ADDR, rcv_buff, POUT_ADC_MAX_ADDR_0, 2);
-	 pout.max = (rcv_buff[0] << 8) | (rcv_buff[1] & 0xff);
-
-	 readPage(BASE_ADDR, rcv_buff, PIN_ADC_MIN_ADDR_0, 2);
-	 pin.min = (rcv_buff[0] << 8) | (rcv_buff[1] & 0xff);
-
-	 readPage(BASE_ADDR, rcv_buff, PIN_ADC_MAX_ADDR_0, 2);
-	 pin.max = (rcv_buff[0] << 8) | (rcv_buff[1] & 0xff);
-
-	 readPage(BASE_ADDR, rcv_buff, VSWR_ADC_MIN_ADDR_0, 2);
-	 vswr.min = (rcv_buff[0] << 8) | (rcv_buff[1] & 0xff);
-
-	 readPage(BASE_ADDR, rcv_buff, VSWR_ADC_MAX_ADDR_0, 2);
-	 vswr.max = (rcv_buff[0] << 8) | (rcv_buff[1] & 0xff);
-
-	 */
-	//i2c1_byte_tx(MCP4706_CHIP_ADDR, buff, 2);
 	startTimer3(1);
+	//configureADC(pa->adc);
+	configADC();
+	ADC1->CR |= ADC_CR_ADSTART; // Start ADC conversion
 	// Check the connection:
 	/* USER CODE END 2 */
 
@@ -283,30 +224,29 @@ int main(void) {
 		}
 
 		processReceivedSerial(pa);
-
-
-		 if (pa->status == PA_UPDATE) {
-
-		 pa->status = PA_WAIT;
+		readADC(pa->adc);
+		movingAverage(pa->adc);
+		if (pa->status == PA_UPDATE) {
+			pa->status = PA_WAIT;
 //		 ds18b20_convert();
 //		 pa->temperature_out = ds18b20_read_temperature();
-		 pa->temperature = lm75_read();
-/*		 pa->pr = arduino_map_int8(pa->adc->adcMA[PREF_CH], MAX4003_ADC_MIN,
-		 MAX4003_ADC_MAX, -30, 0);
-		 pa->pout = arduino_map_int8(pa->adc->adcMA[POUT_CH],
-		 MAX4003_ADC_MIN,
-		 MAX4003_ADC_MAX, -30, 0);
-		 pa->current = ADC_CURRENT_FACTOR * pa->adc->adcMA[CURRENT_CH]
-		 / 4096.0f;
-		 pa->gain = arduino_map_int8(pa->adc->adcMA[PIN_CH], MAX4003_ADC_MIN,
-		 MAX4003_ADC_MAX, 0, 30);
-		 pa->vswr = vswr_calc(pa->pout, pa->pr);
-		 pa->pin = arduino_map_int8(pa->adc->adcMA[PIN_CH], MAX4003_ADC_MIN,
-		 MAX4003_ADC_MAX, -30, 0);
-		 pa->voltage = ADC_VOLTAGE_FACTOR * pa->adc->adcMA[VOLTAGE_CH]
-		 / 4096.0f;
-*/
-		 }
+			pa->temperature = lm75_read();
+			/*		 pa->pr = arduino_map_int8(pa->adc->adcMA[PREF_CH], MAX4003_ADC_MIN,
+			 MAX4003_ADC_MAX, -30, 0);
+			 pa->pout = arduino_map_int8(pa->adc->adcMA[POUT_CH],
+			 MAX4003_ADC_MIN,
+			 MAX4003_ADC_MAX, -30, 0);
+			 pa->current = ADC_CURRENT_FACTOR * pa->adc->adcMA[CURRENT_CH]
+			 / 4096.0f;
+			 pa->gain = arduino_map_int8(pa->adc->adcMA[PIN_CH], MAX4003_ADC_MIN,
+			 MAX4003_ADC_MAX, 0, 30);
+			 pa->vswr = vswr_calc(pa->pout, pa->pr);
+			 pa->pin = arduino_map_int8(pa->adc->adcMA[PIN_CH], MAX4003_ADC_MIN,
+			 MAX4003_ADC_MAX, -30, 0);
+			 pa->voltage = ADC_VOLTAGE_FACTOR * pa->adc->adcMA[VOLTAGE_CH]
+			 / 4096.0f;
+			 */
+		}
 
 		module_pa_state_update(pa);
 		/*
@@ -392,12 +332,12 @@ static void MX_ADC1_Init(void) {
 	hadc1.Init.EOCSelection = ADC_EOC_SEQ_CONV;
 	hadc1.Init.LowPowerAutoWait = DISABLE;
 	hadc1.Init.LowPowerAutoPowerOff = DISABLE;
-	hadc1.Init.ContinuousConvMode = ENABLE;
+	hadc1.Init.ContinuousConvMode = DISABLE;
 	hadc1.Init.NbrOfConversion = 7;
 	hadc1.Init.DiscontinuousConvMode = DISABLE;
 	hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
 	hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
-	hadc1.Init.DMAContinuousRequests = ENABLE;
+	hadc1.Init.DMAContinuousRequests = DISABLE;
 	hadc1.Init.Overrun = ADC_OVR_DATA_PRESERVED;
 	hadc1.Init.SamplingTimeCommon1 = ADC_SAMPLETIME_160CYCLES_5;
 	hadc1.Init.SamplingTimeCommon2 = ADC_SAMPLETIME_160CYCLES_5;
@@ -583,21 +523,6 @@ static void MX_USART1_UART_Init(void) {
 	/* USER CODE BEGIN USART1_Init 2 */
 
 	/* USER CODE END USART1_Init 2 */
-
-}
-
-/**
- * Enable DMA controller clock
- */
-static void MX_DMA_Init(void) {
-
-	/* DMA controller clock enable */
-	__HAL_RCC_DMA1_CLK_ENABLE();
-
-	/* DMA interrupt init */
-	/* DMA1_Channel1_IRQn interrupt configuration */
-	HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 0, 0);
-	HAL_NVIC_EnableIRQ(DMA1_Channel1_IRQn);
 
 }
 
