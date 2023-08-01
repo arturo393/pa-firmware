@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="CMakePresetLoader"><![CDATA[{
+  "useNewFormat": true
+}]]></component>
+  <component name="CMakeReloadState">
+    <option name="reloaded" value="true" />
+  </component>
+  <component name="CMakeRunConfigurationManager">
+    <generated>
+      <config projectName="pa_stm32g030" targetName="pa_stm32g030" />
+    </generated>
+  </component>
+  <component name="CMakeSettings">
+    <configurations>
+      <configuration PROFILE_NAME="Debug" ENABLED="true" CONFIG_NAME="Debug" />
+    </configurations>
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="3b06caf6-295f-4bcb-9f60-2639c770b8f3" name="Changes" comment="">
+      <change afterPath="$PROJECT_DIR$/PA_UHF/CMakeLists.txt" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/PA_UHF/CMakeLists_template.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/PA_UHF/.settings/desktop.ini" beforeDir="false" afterPath="$PROJECT_DIR$/PA_UHF/.settings/desktop.ini" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/PA_UHF/.settings/language.settings.xml" beforeDir="false" afterPath="$PROJECT_DIR$/PA_UHF/.settings/language.settings.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/PA_UHF/Core/Inc/bda4601.h" beforeDir="false" afterPath="$PROJECT_DIR$/PA_UHF/Core/Inc/bda4601.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/PA_UHF/Core/Inc/desktop.ini" beforeDir="false" afterPath="$PROJECT_DIR$/PA_UHF/Core/Inc/desktop.ini" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/PA_UHF/Core/Inc/i2c1.h" beforeDir="false" afterPath="$PROJECT_DIR$/PA_UHF/Core/Inc/i2c1.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/PA_UHF/Core/Inc/m24c64.h" beforeDir="false" afterPath="$PROJECT_DIR$/PA_UHF/Core/Inc/m24c64.h" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/PA_UHF/Core/Src/adc.c" beforeDir="false" afterPath="$PROJECT_DIR$/PA_UHF/Core/Src/adc.c" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/PA_UHF/Core/Src/desktop.ini" beforeDir="false" afterPath="$PROJECT_DIR$/PA_UHF/Core/Src/desktop.ini" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/PA_UHF/Core/Src/i2c1.c" beforeDir="false" afterPath="$PROJECT_DIR$/PA_UHF/Core/Src/i2c1.c" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/PA_UHF/Core/Src/lm75.c" beforeDir="false" afterPath="$PROJECT_DIR$/PA_UHF/Core/Src/lm75.c" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/PA_UHF/Core/Src/m24c64.c" beforeDir="false" afterPath="$PROJECT_DIR$/PA_UHF/Core/Src/m24c64.c" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/PA_UHF/Core/Src/main.c" beforeDir="false" afterPath="$PROJECT_DIR$/PA_UHF/Core/Src/main.c" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/PA_UHF/Core/Src/max4003.c" beforeDir="false" afterPath="$PROJECT_DIR$/PA_UHF/Core/Src/max4003.c" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/PA_UHF/Core/Startup/desktop.ini" beforeDir="false" afterPath="$PROJECT_DIR$/PA_UHF/Core/Startup/desktop.ini" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/PA_UHF/Core/desktop.ini" beforeDir="false" afterPath="$PROJECT_DIR$/PA_UHF/Core/desktop.ini" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/PA_UHF/Debug/Core/Src/bda4601.o" beforeDir="false" afterPath="$PROJECT_DIR$/PA_UHF/Debug/Core/Src/bda4601.o" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/PA_UHF/Debug/Core/Src/i2c1.o" beforeDir="false" afterPath="$PROJECT_DIR$/PA_UHF/Debug/Core/Src/i2c1.o" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/PA_UHF/Debug/Core/Src/i2c1.su" beforeDir="false" afterPath="$PROJECT_DIR$/PA_UHF/Debug/Core/Src/i2c1.su" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/PA_UHF/Debug/Core/Src/main.o" beforeDir="false" afterPath="$PROJECT_DIR$/PA_UHF/Debug/Core/Src/main.o" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/PA_UHF/Debug/Core/Src/main.su" beforeDir="false" afterPath="$PROJECT_DIR$/PA_UHF/Debug/Core/Src/main.su" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/PA_UHF/Debug/Core/Src/max4003.o" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/PA_UHF/Debug/Core/Src/max4003.su" beforeDir="false" afterPath="$PROJECT_DIR$/PA_UHF/Debug/Core/Src/max4003.su" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/PA_UHF/Debug/PA_UHF.elf" beforeDir="false" afterPath="$PROJECT_DIR$/PA_UHF/Debug/PA_UHF.elf" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/PA_UHF/Debug/PA_UHF.list" beforeDir="false" afterPath="$PROJECT_DIR$/PA_UHF/Debug/PA_UHF.list" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/PA_UHF/Debug/PA_UHF.map" beforeDir="false" afterPath="$PROJECT_DIR$/PA_UHF/Debug/PA_UHF.map" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/PA_UHF/Drivers/CMSIS/Device/ST/STM32G0xx/Include/desktop.ini" beforeDir="false" afterPath="$PROJECT_DIR$/PA_UHF/Drivers/CMSIS/Device/ST/STM32G0xx/Include/desktop.ini" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/PA_UHF/Drivers/CMSIS/Device/ST/STM32G0xx/Source/Templates/desktop.ini" beforeDir="false" afterPath="$PROJECT_DIR$/PA_UHF/Drivers/CMSIS/Device/ST/STM32G0xx/Source/Templates/desktop.ini" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/PA_UHF/Drivers/CMSIS/Device/ST/STM32G0xx/Source/desktop.ini" beforeDir="false" afterPath="$PROJECT_DIR$/PA_UHF/Drivers/CMSIS/Device/ST/STM32G0xx/Source/desktop.ini" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/PA_UHF/Drivers/CMSIS/Device/ST/STM32G0xx/desktop.ini" beforeDir="false" afterPath="$PROJECT_DIR$/PA_UHF/Drivers/CMSIS/Device/ST/STM32G0xx/desktop.ini" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/PA_UHF/Drivers/CMSIS/Device/ST/desktop.ini" beforeDir="false" afterPath="$PROJECT_DIR$/PA_UHF/Drivers/CMSIS/Device/ST/desktop.ini" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/PA_UHF/Drivers/CMSIS/Device/desktop.ini" beforeDir="false" afterPath="$PROJECT_DIR$/PA_UHF/Drivers/CMSIS/Device/desktop.ini" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/PA_UHF/Drivers/CMSIS/Include/desktop.ini" beforeDir="false" afterPath="$PROJECT_DIR$/PA_UHF/Drivers/CMSIS/Include/desktop.ini" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/PA_UHF/Drivers/CMSIS/desktop.ini" beforeDir="false" afterPath="$PROJECT_DIR$/PA_UHF/Drivers/CMSIS/desktop.ini" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/PA_UHF/Drivers/STM32G0xx_HAL_Driver/Inc/Legacy/desktop.ini" beforeDir="false" afterPath="$PROJECT_DIR$/PA_UHF/Drivers/STM32G0xx_HAL_Driver/Inc/Legacy/desktop.ini" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/PA_UHF/Drivers/STM32G0xx_HAL_Driver/Inc/desktop.ini" beforeDir="false" afterPath="$PROJECT_DIR$/PA_UHF/Drivers/STM32G0xx_HAL_Driver/Inc/desktop.ini" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/PA_UHF/Drivers/STM32G0xx_HAL_Driver/Src/desktop.ini" beforeDir="false" afterPath="$PROJECT_DIR$/PA_UHF/Drivers/STM32G0xx_HAL_Driver/Src/desktop.ini" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/PA_UHF/Drivers/STM32G0xx_HAL_Driver/desktop.ini" beforeDir="false" afterPath="$PROJECT_DIR$/PA_UHF/Drivers/STM32G0xx_HAL_Driver/desktop.ini" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/PA_UHF/Drivers/desktop.ini" beforeDir="false" afterPath="$PROJECT_DIR$/PA_UHF/Drivers/desktop.ini" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/PA_UHF/desktop.ini" beforeDir="false" afterPath="$PROJECT_DIR$/PA_UHF/desktop.ini" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/desktop.ini" beforeDir="false" afterPath="$PROJECT_DIR$/desktop.ini" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="ClangdSettings">
+    <option name="formatViaClangd" value="false" />
+  </component>
+  <component name="ExecutionTargetManager" SELECTED_TARGET="CMakeBuildProfile:Debug" />
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="MarkdownSettingsMigration">
+    <option name="stateVersion" value="1" />
+  </component>
+  <component name="ProjectApplicationVersion">
+    <option name="ide" value="CLion" />
+    <option name="majorVersion" value="2022" />
+    <option name="minorVersion" value="3" />
+  </component>
+  <component name="ProjectId" id="2Lgq0DkxerbJc87AWMiMR9OWNpK" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "RunOnceActivity.OpenProjectViewOnStart": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.cidr.known.project.marker": "true",
+    "WebServerToolWindowFactoryState": "false",
+    "cf.first.check.clang-format": "false",
+    "cidr.known.project.marker": "true",
+    "last_opened_file_path": "C:/Users/artur/GDrive/development/stm32/pa-stm32g030",
+    "node.js.detected.package.eslint": "true",
+    "node.js.detected.package.tslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "node.js.selected.package.tslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm",
+    "vue.rearranger.settings.migration": "true"
+  }
+}]]></component>
+  <component name="RunManager">
+    <configuration default="true" type="CLionExternalRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" PASS_PARENT_ENVS_2="true">
+      <method v="2">
+        <option name="CLION.EXTERNAL.BUILD" enabled="true" />
+      </method>
+    </configuration>
+    <configuration name="pa_stm32g030" type="CMakeRunConfiguration" factoryName="Application" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" PASS_PARENT_ENVS_2="true" PROJECT_NAME="pa_stm32g030" TARGET_NAME="pa_stm32g030" CONFIG_NAME="Debug" RUN_TARGET_PROJECT_NAME="pa_stm32g030" RUN_TARGET_NAME="pa_stm32g030">
+      <method v="2">
+        <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+      </method>
+    </configuration>
+  </component>
+  <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="application-level" UseSingleDictionary="true" transferred="true" />
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="3b06caf6-295f-4bcb-9f60-2639c770b8f3" name="Changes" comment="" />
+      <created>1676302848031</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1676302848031</updated>
+      <workItem from="1676302849031" duration="708000" />
+    </task>
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+</project>
