@@ -7,26 +7,40 @@
 
 #include <uart1.h>
 
-UART_t *uart(UART_HandleTypeDef *uart){
-	UART_t * u1;
-	u1 = malloc(sizeof(UART1_t));
-	u1->handler = uart;
+UART_t* uart(USART_TypeDef *uart) {
+	UART_t *u1;
+	u1 = malloc(sizeof(UART_t));
+	u1->reg = uart;
 	u1->startTicks = 0;
-	memset(u1->data,0,sizeof(u1->data));
+	memset(u1->data, 0, sizeof(u1->data));
+	u1->len = 0;
 	u1->status = NOT_READY;
 	return (u1);
 }
 
-uint8_t  uart1_clean_by_timeout(UART1_t* uart1,const char* str){
-		if (HAL_GetTick() - uart1->timeout > SECONDS(5)) {
-			uart1_send_str((char*)str);
-			uart1_send_str("-TIMEOUT\r\n");
-			if(strlen(str)>0)
-				uart1_clean_buffer(uart1);
-			uart1->timeout = HAL_GetTick();
-			return (1);
-		}
-		return (0);
+uint8_t uartSend(UART_t *u){
+	for(uint8_t i = 0; i < u->len; i++){
+	while (!READ_BIT(u->reg->ISR, USART_ISR_TXE_TXFNF))
+		;
+	u->reg->TDR = (uint8_t) (u->data[i] & 0xFFU);
+
+	while (!READ_BIT(u->reg->ISR, USART_ISR_TC))
+		;
+	}
+
+	return (u->len);
+}
+
+uint8_t uart1_clean_by_timeout(UART1_t *uart1, const char *str) {
+	if (HAL_GetTick() - uart1->timeout > SECONDS(5)) {
+		uart1_send_str((char*) str);
+		uart1_send_str("-TIMEOUT\r\n");
+		if (strlen(str) > 0)
+			uart1_clean_buffer(uart1);
+		uart1->timeout = HAL_GetTick();
+		return (1);
+	}
+	return (0);
 }
 
 void uart1_gpio_init() {
@@ -71,7 +85,6 @@ void uart1_init(uint32_t pclk, uint32_t baud_rate, UART1_t *u) {
 	/* transmitter enable*/
 	USART1->CR1 = USART_CR1_TE | USART_CR1_RE;
 
-
 	u->rx_count = 0;
 
 	uart1_clean_buffer(u);
@@ -82,6 +95,30 @@ void uart1_init(uint32_t pclk, uint32_t baud_rate, UART1_t *u) {
 	SET_BIT(USART1->CR1, USART_CR1_RXNEIE_RXFNEIE);
 	NVIC_EnableIRQ(USART1_IRQn);
 	SET_BIT(USART1->CR1, USART_CR1_UE);
+}
+
+void uartInit(USART_TypeDef* reg) {
+	uint32_t br_value = 0;
+
+	uart1_gpio_init();
+
+	/*enable clock access to USART1 */
+	SET_BIT(RCC->APBENR2, RCC_APBENR2_USART1EN);
+	/*set HSI 16 CLK */
+	CLEAR_BIT(RCC->CCIPR, RCC_CCIPR_USART1SEL_0);
+	SET_BIT(RCC->CCIPR, RCC_CCIPR_USART1SEL_1);
+	//MODIFY_REG(USART1->PRESC,USART_PRESC_PRESCALER,0x0010);
+	/* set baud rate */
+	br_value = (HS16_CLK) / BAUD_RATE;
+	reg->BRR = (uint16_t) br_value;
+	/* transmitter enable*/
+	reg->CR1 = USART_CR1_TE | USART_CR1_RE;
+	/* enable FIFO */
+	//SET_BIT(USART1->CR2, USART_CR1_FIFOEN);
+	/* Enable interrupt */
+	SET_BIT(reg->CR1, USART_CR1_RXNEIE_RXFNEIE);
+	NVIC_EnableIRQ(USART1_IRQn);
+	SET_BIT(reg->CR1, USART_CR1_UE);
 }
 
 void uart1_dma_init() {
@@ -145,7 +182,7 @@ uint8_t uart1_1byte_read(void) {
 		return '\0';
 }
 
-void  uart1_read_to_frame(UART1_t *u) {
+void uart1_read_to_frame(UART1_t *u) {
 	if (u->rx_count >= RX_BUFFLEN) {
 		uart1_clean_buffer(u);
 		u->rx_count = 0;
@@ -162,7 +199,7 @@ void uart1_send_str(char *str) {
 void uart1_send_frame(char *str, uint8_t len) {
 
 	if (len > 0) {
-		for (int i = 0; i < len; i++){
+		for (int i = 0; i < len; i++) {
 			uart1_write(str[i]);
 			str[i] = (char) '\0';
 		}

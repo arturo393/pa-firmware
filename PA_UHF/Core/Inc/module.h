@@ -19,6 +19,7 @@
 #include "rdss.h"
 #include "bda4601.h"
 #include "m24c64.h"
+#include "led.h";
 
 #define EPSILON 0.0001
 #define MAX_TEMPERATURE 75
@@ -80,7 +81,7 @@ typedef struct MODULE {
 	uint16_t current;
 	uint8_t enable;
 	uint8_t temperature;
-	float temperature_out;
+	uint8_t temperatureOut;
 	uint8_t vswr;
 	uint8_t id;
 	uint8_t function;
@@ -90,6 +91,7 @@ typedef struct MODULE {
     UART_t *serial;
     BDA4601_t *attenuator;
     I2C_HandleTypeDef *i2c;
+    LED_t led;
 } POWER_AMPLIFIER_t;
 
 
@@ -107,6 +109,8 @@ void module_calc_parameters(POWER_AMPLIFIER_t m, uint16_t *media_array);
 void startTimer3(uint8_t seconds);
 void module_pa_state_update(POWER_AMPLIFIER_t *pa);
 void print_parameters(UART1_t *u, POWER_AMPLIFIER_t *pa);
+void printParameters(POWER_AMPLIFIER_t *pa);
+void printRaw(POWER_AMPLIFIER_t *pa);
 float vswr_calc(int8_t pf, int8_t pr);
 float arduino_map_float(uint16_t value, uint16_t in_min, uint16_t in_max,
 		float out_min, float out_max);
@@ -116,5 +120,6 @@ void rs485_set_query_frame(POWER_AMPLIFIER_t *module);
 void processReceivedSerial(POWER_AMPLIFIER_t *p);
 uint8_t exec(POWER_AMPLIFIER_t *pa, uint8_t *dataReceived);
 uint8_t readEepromData(POWER_AMPLIFIER_t *p, EEPROM_SECTOR_t sector);
+HAL_StatusTypeDef saveData(POWER_AMPLIFIER_t *p, EEPROM_SECTOR_t sector);
 
 #endif /* INC_LTEL_H_ */

@@ -6,6 +6,22 @@
  */
 #include "led.h"
 
+LED_t* ledInit(void) {
+
+	LED_t *l = malloc(sizeof(LED_t));
+	if (l != NULL) {
+		l->ch_counter = 0;
+		l->cl_counter = 0;
+		l->cn_counter = 0;
+		l->ka = 0;
+		l->sysrp_counter = 0;
+		l->th_counter = 0;
+		l->tok_counter = 0;
+	}
+
+	return (l);
+}
+
 void led_init(LED_t *led) {
 
 	/*CURRENT LOW LED PA12  as output */
@@ -35,26 +51,27 @@ void led_init(LED_t *led) {
 	led_reset(led);
 
 }
+
 void led_off(void) {
 
 }
 
 void led_enable_kalive(LED_t *l) {
-	if (HAL_GetTick() - l->ka_counter > LED_KA_STATE_TIMEOUT)
-		l->ka_counter = HAL_GetTick();
+	if (HAL_GetTick() - l->ka > LED_KA_STATE_TIMEOUT)
+		l->ka = HAL_GetTick();
 	else {
-		if (HAL_GetTick() - l->ka_counter > LED_KA_ON_TIMEOUT)
+		if (HAL_GetTick() - l->ka > LED_KA_ON_TIMEOUT)
 			sys_rp_led_off();
 		else
 			sys_rp_led_on();
 	}
-
 }
+
 void led_reset(LED_t *l) {
 	l->ch_counter = 0;
 	l->cl_counter = 0;
 	l->cn_counter = 0;
-	l->ka_counter = HAL_GetTick();
+	l->ka = HAL_GetTick();
 	l->sysrp_counter = 0;
 	l->th_counter = 0;
 	l->tok_counter = 0;

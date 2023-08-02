@@ -13,10 +13,14 @@
 #include "stdlib.h"
 #include "string.h"
 
-#define UART_SIZE 30
+#define UART_SIZE 100
 #define  RX_BUFFLEN 25
 #define TX_BUFFLEN  100
 #define SECONDS(x) x*1000
+#define SYS_FREQ 64000000
+#define APB_FREQ SYS_FREQ
+#define HS16_CLK 16000000
+#define BAUD_RATE 115200
 
 typedef enum{
 	READY,
@@ -34,18 +38,19 @@ typedef struct UART1 {
 
 typedef struct {
 	uint8_t data[UART_SIZE];
-	uint8_t *txData;
-	uint8_t txSize;
 	uint8_t len;
 	uint32_t operationTimeout;
-	uint8_t isReceivedDataReady;
-	uint8_t isDebugModeEnabled;
 	UART_Status status;
 	UART_HandleTypeDef *handler;
 	uint32_t startTicks;
+	GPIO_TypeDef* dePort;
+	uint16_t dePin;
+	USART_TypeDef* reg;
 } UART_t;
 
-UART_t *uart(UART_HandleTypeDef *uart);
+UART_t *uart(USART_TypeDef *uart);
+uint8_t uartSend(UART_t *u);
+
 uint8_t  uart1_clean_by_timeout(UART1_t* uart1,const char* str);
 void uart1_init(uint32_t, uint32_t, UART1_t*);
 void uart1_write(volatile char);
@@ -57,5 +62,6 @@ uint8_t uart1_1byte_read(void);
 void uart1_read_to_frame(UART1_t *u);
 void uart1_clean_buffer(UART1_t*);
 uint8_t uart1_nonblocking_read(void);
+void uartInit(USART_TypeDef* reg);
 
 #endif /* INC_UART1_H_ */

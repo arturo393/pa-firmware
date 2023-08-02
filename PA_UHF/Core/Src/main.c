@@ -21,25 +21,14 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include <uart1.h>
-#include <math.h>
 #include "utils.h"
-#include "i2c1.h"
-#include "stdbool.h"
-#include "bda4601.h"
-#include "led.h"
 #include "module.h"
 #include "ad8363.h"
-#include "led.h"
 #include "max4003.h"
 #include "lm75.h"
-#include <m24c64.h>
-#include <rdss.h>
 #include "ds18b20.h"
-#include "MCP4725.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -66,10 +55,7 @@ IWDG_HandleTypeDef hiwdg;
 UART_HandleTypeDef huart1;
 
 /* USER CODE BEGIN PV */
-#define SYS_FREQ 64000000
-#define APB_FREQ SYS_FREQ
-#define HS16_CLK 16000000
-#define BAUD_RATE 115200
+
 #define LED_PIN PB1
 #define DE_PIN PA15
 
@@ -85,22 +71,42 @@ static void MX_IWDG_Init(void);
 static void MX_I2C1_Init(void);
 static void MX_USART1_UART_Init(void);
 /* USER CODE BEGIN PFP */
-
+// UART1 interrupt handler
 void TIM3_IRQHandler(void) {
 	CLEAR_BIT(TIM3->SR, TIM_SR_UIF);
-	pa->status = PA_UPDATE;
+	LED_t l = pa->led;
+
+	if (l->ka > LED_KA_STATE_TIMEOUT)
+		l->ka++;
+	else {
+		if (HAL_GetTick() - l->ka > LED_KA_ON_TIMEOUT)
+			sys_rp_led_off();
+		else
+			sys_rp_led_on();
+	}
 }
 
-/*
- void print_adc(UART1_t *u, uint16_t *adc) {
- sprintf((char*) u->tx_buffer,
- "Pout %d  \t Gain %u \t Curent %u \t Voltage %u\r\n", adc[POUT_CH],
- adc[GAIN_CH], adc[CURRENT_CH], adc[VOLTAGE_CH]);
- uart1_send_frame((char*) u->tx_buffer, TX_BUFFLEN);
- uart1_clean_buffer(u);
- }
+// UART1 interrupt handler
+void USART1_IRQHandler(void) {
+	UART_t *u = pa->serial;
+	if (USART1->ISR & USART_ISR_RXNE_RXFNE) { // Check if RXNE flag is set
+		uint8_t receivedData = USART1->RDR; // Read received data
 
- */
+		// Check if buffer is not full
+		if (u->len < UART_SIZE - 1) {
+			u->data[u->len] = receivedData;
+			u->len++;
+		} else {
+			u->len = 0;
+			memset(u->data, 0, sizeof(u->data));
+		}
+
+	} else {
+		USART1->CR1 &= ~USART_CR1_UE;
+		// Enable UART1
+		USART1->CR1 |= USART_CR1_UE;
+	}
+}
 
 /* USER CODE END PFP */
 
@@ -140,30 +146,26 @@ int main(void) {
 //  MX_ADC1_Init();
 //  MX_IWDG_Init();
 	MX_I2C1_Init();
-	MX_USART1_UART_Init();
+//  MX_USART1_UART_Init();
 	/* USER CODE BEGIN 2 */
 
 	HAL_StatusTypeDef res;
 
-//	res = HAL_TIM_Base_Start(&htim1);
-//	if (res != HAL_OK)
-//		Error_Handler();
-//	LED_t led;
 	pa = paInit();
+	if (pa == NULL)
+		Error_Handler();
+
 	HAL_GPIO_WritePin(PA_HAB_GPIO_Port, PA_HAB_Pin, GPIO_PIN_RESET);
 	pa->i2c = &hi2c1;
 
-	pa->adc = malloc(sizeof(ADC_t));
-	memset(pa->adc->adcSum, 0, sizeof(pa->adc->adcSum));
-	memset(pa->adc->adcSum, 0, sizeof(pa->adc->adcMA));
-	memset(pa->adc->adcCounter, 0, sizeof(pa->adc->adcCounter));
-	for (int adcIdx = 0; adcIdx < ADC_CHANNELS; adcIdx++) {
-		memset(pa->adc->adcReadings[adcIdx], 0,
-				sizeof(pa->adc->adcReadings[adcIdx]));
-	}
-	pa->adc->reg = ADC1;
-	ADC1->IER |= ADC_IER_EOCIE;
+	pa->adc = adcInit(ADC1);
+	if (pa->adc == NULL)
+		Error_Handler();
+	configADC(pa->adc->reg);
+
 	pa->attenuator = malloc(sizeof(BDA4601_t));
+	if (pa->attenuator == NULL)
+		Error_Handler();
 	pa->attenuator->clkPin = CLK_ATT_Pin;
 	pa->attenuator->clkPort = CLK_ATT_GPIO_Port;
 	pa->attenuator->dataPin = DATA_ATT_Pin;
@@ -171,89 +173,82 @@ int main(void) {
 	pa->attenuator->lePin = LE_ATT_Pin;
 	pa->attenuator->lePort = LE_ATT_GPIO_Port;
 	pa->attenuator->val = 0;
-
-	pa->serial = uart(&huart1);
-
-	pa->poutDac = MCP4725_init(&hi2c1, MCP4706_CHIP_ADDR, REFERENCE_VOLTAGE);
-//	float storedVoltage = MCP4725_getVoltage(pa->poutDac);
-//	 float newVoltage = 1.5;
-//	 if
-//	  (fabs(storedVoltage - newVoltage) > EPSILON) {
-//	 MCP4725_setVoltage(pa->poutDac, newVoltage, MCP4725_EEPROM_MODE,
-//	 MCP4725_POWER_DOWN_OFF);
-//	 }
-
 	readEepromData(pa, ATTENUATION);
 	setInitialAttenuation(pa->attenuator, STARTING_MILLIS);
 
+	pa->serial = uart(USART1);
+	pa->serial->handler = NULL;
+	if (pa->serial == NULL)
+		Error_Handler();
+	uartInit(pa->serial->reg);
+	pa->serial->dePort = DE_485_GPIO_Port;
+	pa->serial->dePin = DE_485_Pin;
+
+	pa->poutDac = MCP4725_init(&hi2c1, MCP4706_CHIP_ADDR, REFERENCE_VOLTAGE);
+	float storedVoltage = MCP4725_getVoltage(pa->poutDac);
+	float newVoltage = 1.5;
+	if (fabs(storedVoltage - newVoltage) > EPSILON) {
+		MCP4725_setVoltage(pa->poutDac, newVoltage, MCP4725_EEPROM_MODE,
+				MCP4725_POWER_DOWN_OFF);
+	}
+
+	HAL_Delay(100);
 	res = lm75Init(pa->i2c);
 	if (res != HAL_OK)
 		Error_Handler();
-
-	HAL_UART_Receive_IT(pa->serial->handler, pa->serial->data, UART_SIZE);
-
 	// Second, initilaize the MCP4725 object:
-
-	//i2c1_init();
-//	uart1_init(HS16_CLK, BAUD_RATE, &uart1);
-	lm75_init();
-//	ds18b20_init();
-	//led_init(&led);
 	startTimer3(1);
-	//configureADC(pa->adc);
-	configADC();
+	ds18b20_init();
+	//led_init(&led);
+
 	ADC1->CR |= ADC_CR_ADSTART; // Start ADC conversion
 	// Check the connection:
 	/* USER CODE END 2 */
-
+	HAL_GPIO_WritePin(PA_HAB_GPIO_Port, PA_HAB_Pin, GPIO_PIN_SET);
 	/* Infinite loop */
 	/* USER CODE BEGIN WHILE */
 	while (1) {
 		/* USER CODE END WHILE */
 
 		/* USER CODE BEGIN 3 */
-
 		if (HAL_GetTick() - pa->serial->startTicks > 5000) {
-			HAL_UART_DeInit(pa->serial->handler);
+			// Disable UART1
+			USART1->CR1 &= ~USART_CR1_UE;
 			HAL_Delay(1);
-			MX_USART1_UART_Init();
-			HAL_UART_Init(pa->serial->handler); // Enable USART2
+			// Enable UART1
+			USART1->CR1 |= USART_CR1_UE;
+			memset(pa->serial->data, 0, UART_SIZE);
+			pa->serial->len = 0;
 			pa->serial->startTicks = HAL_GetTick();
-			HAL_UART_Receive_IT(pa->serial->handler, pa->serial->data,
-			UART_SIZE);
 		}
-
 		processReceivedSerial(pa);
+
+
 		readADC(pa->adc);
 		movingAverage(pa->adc);
-		if (pa->status == PA_UPDATE) {
-			pa->status = PA_WAIT;
-//		 ds18b20_convert();
-//		 pa->temperature_out = ds18b20_read_temperature();
-			pa->temperature = lm75_read();
-			/*		 pa->pr = arduino_map_int8(pa->adc->adcMA[PREF_CH], MAX4003_ADC_MIN,
-			 MAX4003_ADC_MAX, -30, 0);
-			 pa->pout = arduino_map_int8(pa->adc->adcMA[POUT_CH],
-			 MAX4003_ADC_MIN,
-			 MAX4003_ADC_MAX, -30, 0);
-			 pa->current = ADC_CURRENT_FACTOR * pa->adc->adcMA[CURRENT_CH]
-			 / 4096.0f;
-			 pa->gain = arduino_map_int8(pa->adc->adcMA[PIN_CH], MAX4003_ADC_MIN,
-			 MAX4003_ADC_MAX, 0, 30);
-			 pa->vswr = vswr_calc(pa->pout, pa->pr);
-			 pa->pin = arduino_map_int8(pa->adc->adcMA[PIN_CH], MAX4003_ADC_MIN,
-			 MAX4003_ADC_MAX, -30, 0);
-			 pa->voltage = ADC_VOLTAGE_FACTOR * pa->adc->adcMA[VOLTAGE_CH]
-			 / 4096.0f;
-			 */
-		}
+		ds18b20_convert();
+		pa->temperatureOut = readTemperature();
+		pa->temperature = lm75Read(pa->i2c);
+		pa->pr = arduino_map_int8(pa->adc->ma[PREF_CH], MAX4003_ADC_MIN,
+		MAX4003_ADC_MAX, -30, 0);
+		pa->pout = arduino_map_int8(pa->adc->ma[POUT_CH],
+		MAX4003_ADC_MIN,
+		MAX4003_ADC_MAX, -30, 0);
+		pa->current = ADC_CURRENT_FACTOR * pa->adc->ma[CURRENT_CH];
+		pa->current = arduino_map_int8(pa->adc->ma[PIN_CH], 22, 45, 60, 30);
+		pa->gain = arduino_map_int8(pa->adc->ma[PIN_CH], MAX4003_ADC_MIN,
+		MAX4003_ADC_MAX, 0, 30);
+		pa->vswr = vswr_calc(pa->pout, pa->pr);
+		pa->pin = arduino_map_int8(pa->adc->ma[PIN_CH], MAX4003_ADC_MIN,
+		MAX4003_ADC_MAX, -30, 0);
+		pa->voltage = arduino_map_int8(pa->adc->ma[VOLTAGE_CH], 642, 1240, 10,
+				20);
+		//module_pa_state_update(pa);
 
-		module_pa_state_update(pa);
-		/*
-		 led_current_update(pa->current);
-		 led_enable_kalive(&led);
-		 led_temperature_update(pa->temperature);
-		 */
+		//led_current_update(pa->current);
+		led_enable_kalive(&led);
+		//led_temperature_update(pa->temperature);
+
 		/* USER CODE END WHILE */
 
 		/* USER CODE BEGIN 3 */

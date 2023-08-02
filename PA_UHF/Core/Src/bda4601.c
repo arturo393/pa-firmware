@@ -96,10 +96,11 @@ void setInitialAttenuation(BDA4601_t *b, uint16_t millis) {
 }
 
 void setAttenuation(BDA4601_t *b) {
-	if (b->val < MIN_DB_VALUE || b->val > MAX_DB_VALUE) {
-		b->val = MIN_DB_VALUE;
+	uint8_t val = b->val;
+	if (val < MIN_DB_VALUE || val > MAX_DB_VALUE) {
+		val = MIN_DB_VALUE;
 	}
-	b->val *= 2;
+	val *= 2;
 	for (uint8_t i = 0; i < TIMES; i++) {
 		uint8_t mask = 0b00100000;
 		for (uint8_t j = 0; j < 6; j++) {

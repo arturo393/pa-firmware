@@ -35,7 +35,7 @@ void startTimer3(uint8_t seconds) {
 	/*set preescaler value */
 	TIM3->PSC = 6400 - 1; // 64 000 000 / 64 00 = 1 000 000
 	/* set auto-reload */
-	TIM3->ARR = 1 * 5000 - 1; // 1 000  000 /
+	TIM3->ARR = seconds * 10000 - 1; // 1 000  000 /
 	SET_BIT(TIM3->CR1, TIM_CR1_ARPE);
 	/* clear counter */
 	TIM3->CNT = 0;
@@ -48,9 +48,9 @@ void startTimer3(uint8_t seconds) {
 
 void module_pa_state_update(POWER_AMPLIFIER_t *pa) {
 	if (pa->enable == ON) {
-		if (pa->temperature_out > MAX_TEMPERATURE)
+		if (pa->temperatureOut > MAX_TEMPERATURE)
 			pa_off();
-		if (pa->temperature_out < SAFE_TEMPERATURE) {
+		if (pa->temperatureOut < SAFE_TEMPERATURE) {
 			pa_on();
 			if (pa->vswr > MAX_VSWR)
 				pa_off();
@@ -63,14 +63,14 @@ void module_pa_state_update(POWER_AMPLIFIER_t *pa) {
 }
 
 void processReceivedSerial(POWER_AMPLIFIER_t *p) {
-	UART_t *serial = p->serial;
-	UART_HandleTypeDef *handler = serial->handler;
-	uint8_t *dataReceived = serial->data;
-	uint8_t *len = &(serial->len);
+	UART_t *u = p->serial;
+	UART_HandleTypeDef *handler = u->handler;
+	uint8_t *dataReceived = u->data;
 
-	*len = handler->RxXferSize - handler->RxXferCount;
+	if (u->handler != NULL)
+		u->len = handler->RxXferSize - handler->RxXferCount;
 
-	if (dataReceived[*len - 1] != RDSS_END_MARK)
+	if (dataReceived[u->len - 1] != RDSS_END_MARK)
 		return;
 	if (dataReceived[0] != RDSS_START_MARK) {
 		memset(dataReceived, 0, UART_SIZE);
@@ -78,32 +78,35 @@ void processReceivedSerial(POWER_AMPLIFIER_t *p) {
 	}
 
 	// Data validation
-	if (*len < MINIMUM_FRAME_LEN
+	if (u->len < MINIMUM_FRAME_LEN
 			|| dataReceived[MODULE_TYPE_INDEX] != POWER_AMPLIFIER
-			|| checkCRCValidity(dataReceived, *len) != DATA_OK
+			|| checkCRCValidity(dataReceived, u->len) != DATA_OK
 			|| dataReceived[MODULE_ID_INDEX] != p->id
 			|| dataReceived[CMD_INDEX] == 0) {
-		serial->handler->RxXferCount = UART_SIZE;
-		handler->pRxBuffPtr = handler->pRxBuffPtr - *len;
-		memset(serial->data, 0, UART_SIZE);
-		serial->len = 0;
+		u->handler->RxXferCount = UART_SIZE;
+		handler->pRxBuffPtr = handler->pRxBuffPtr - u->len;
+		memset(u->data, 0, UART_SIZE);
+		u->len = 0;
 		return;
 	}
 
-	*len = exec(p, dataReceived);
-	// Send response via UART
-	HAL_GPIO_WritePin(DE_485_GPIO_Port, DE_485_Pin, GPIO_PIN_SET);
-	HAL_UART_Transmit(serial->handler, dataReceived, *len, 100);
-	HAL_GPIO_WritePin(DE_485_GPIO_Port, DE_485_Pin, GPIO_PIN_RESET);
+	u->len = exec(p, dataReceived);
 
-	serial->handler->RxXferCount = UART_SIZE;
-	handler->pRxBuffPtr = handler->pRxBuffPtr - *len;
-	memset(dataReceived, 0, *len);
-	*len = 0;
+	// Send response via UART
+	SET_BIT(u->dePort->ODR, u->dePin);
+	uartSend(u);
+	CLEAR_BIT(u->dePort->ODR, u->dePin);
+
+	if (u->handler != NULL) {
+		u->handler->RxXferCount = UART_SIZE;
+		handler->pRxBuffPtr = handler->pRxBuffPtr - u->len;
+	}
+	memset(dataReceived, 0, u->len);
+	u->len = 0;
 }
 
 uint8_t exec(POWER_AMPLIFIER_t *pa, uint8_t *dataReceived) {
-
+	UART_t *u = pa->serial;
 	uint8_t dataLen = 0;
 	uint8_t *response = dataReceived;
 	uint8_t *responsePtr;
@@ -135,14 +138,23 @@ uint8_t exec(POWER_AMPLIFIER_t *pa, uint8_t *dataReceived) {
 		responsePtr += sizeof(pa->pin);
 		break;
 	case QUERY_PARAMETER_STR:
-//		print_parameters(&uart1, pa);
+		printParameters(pa);
 		break;
 	case QUERY_ADC:
-//		print_adc(&uart1, adc.media);
+		printRaw(pa);
 		break;
 	case SET_ATT_LTEL:
-		pa->att = dataReceived[DATA_START_INDEX];
-		bda4601_set_att(pa->att, 3);
+		pa->attenuator->val = dataReceived[DATA_START_INDEX];
+		setAttenuation(pa->attenuator);
+		u->len =
+				sprintf((char*) u->data, "Attenuation %u\r\n", pa->attenuator->val);
+		// Send response via UART
+		SET_BIT(u->dePort->ODR, u->dePin);
+		uartSend(u);
+		CLEAR_BIT(u->dePort->ODR, u->dePin);
+		memset(u->data, 0, sizeof(u->data));
+		u->len = 0;
+		saveData(pa,ATTENUATION);
 //		m24c64_write_N(BASE_ADDR,  &(pa->att), ATT_VALUE_ADDR, 1);
 //		sprintf((char*) uart1.tx_buffer, "Attenuation %u\r\n", pa->att);
 //		uart1_send_frame((char*) uart1.tx_buffer, TX_BUFFLEN);
@@ -163,25 +175,85 @@ uint8_t exec(POWER_AMPLIFIER_t *pa, uint8_t *dataReceived) {
 }
 
 uint8_t readEepromData(POWER_AMPLIFIER_t *p, EEPROM_SECTOR_t sector) {
-    I2C_HandleTypeDef *i2c = p->i2c;
-    BDA4601_t *attenuator = p->attenuator;
-    uint8_t result = 0; // Initialize result to 0 (success).
+	I2C_HandleTypeDef *i2c = p->i2c;
+	BDA4601_t *attenuator = p->attenuator;
+	uint8_t result = 0; // Initialize result to 0 (success).
 
-    switch (sector) {
-        case ATTENUATION:
-            attenuator->val = readByte(i2c, M24C64_PAGE_ADDR(0), ATTENUATION_OFFSET);
-            if (attenuator->val < MIN_DB_VALUE  || attenuator->val > MAX_DB_VALUE) {
-            	attenuator->val = 0;
-                result = 1; // Set result to 1 (error).
-            }
-            break;
-        default:
-            result = 2; // Set result to 2 (unsupported sector).
-            break;
-    }
-    return (result);
+	switch (sector) {
+	case ATTENUATION:
+		attenuator->val = readByte(i2c, M24C64_PAGE_ADDR(0),
+		ATTENUATION_OFFSET);
+		if (attenuator->val < MIN_DB_VALUE || attenuator->val > MAX_DB_VALUE) {
+			attenuator->val = 0;
+			result = 1; // Set result to 1 (error).
+		}
+		break;
+	default:
+		result = 2; // Set result to 2 (unsupported sector).
+		break;
+	}
+	return (result);
 }
 
+
+HAL_StatusTypeDef saveData(POWER_AMPLIFIER_t *p, EEPROM_SECTOR_t sector) {
+	I2C_HandleTypeDef *i2c = p->i2c;
+	BDA4601_t *a = p->attenuator;
+	uint32_t page = 0;
+	uint8_t *data;
+	uint8_t dataLen = 0;
+	HAL_StatusTypeDef res;
+	uint8_t offset = 0;
+	switch (sector) {
+	case ATTENUATION:
+		page = M24C64_PAGE_ADDR(0);
+		offset = ATTENUATION_OFFSET;
+		if (a->val < 0 || a->val > 31)
+			a->val = 0;
+		data = (uint8_t*) &(a->val);
+		dataLen = sizeof(a->val);
+		break;
+	default:
+		return (HAL_ERROR);
+		break;
+	}
+
+	res = savePage(i2c, page, data, offset, dataLen);
+	return (res);
+
+}
+
+
+
+void printParameters(POWER_AMPLIFIER_t *pa) {
+	UART_t *u = pa->serial;
+	u->len =
+			sprintf((char*) u->data,
+					"Pout %d[dBm] Att %u[dB] Gain %u[dB] Pin %d[dBm] Curent %d[mA] Voltage %u[V]\r\n",
+					pa->pout, pa->attenuator->val, pa->gain, pa->pin, pa->current,
+					(uint8_t) pa->voltage);
+	// Send response via UART
+	SET_BIT(u->dePort->ODR, u->dePin);
+	uartSend(u);
+	CLEAR_BIT(u->dePort->ODR, u->dePin);
+	memset(u->data, 0, sizeof(u->data));
+	u->len = 0;
+}
+
+void printRaw(POWER_AMPLIFIER_t *pa) {
+	UART_t *u = pa->serial;
+	ADC_t *a = pa->adc;
+	u->len = sprintf((char*) u->data,
+			"Pout %d  \t Gain %u \t Curent %u \t Voltage %u\r\n",
+			a->ma[POUT_CH], a->ma[GAIN_CH], a->ma[CURRENT_CH],
+			a->ma[VOLTAGE_CH]);
+	// Send response via UART
+	SET_BIT(u->dePort->ODR, u->dePin);
+	uartSend(u);
+	CLEAR_BIT(u->dePort->ODR, u->dePin);
+	memset(u->data, 0, sizeof(u->data));
+	u->len = 0;
+}
 
 void print_parameters(UART1_t *u, POWER_AMPLIFIER_t *pa) {
 	sprintf((char*) u->tx_buffer,

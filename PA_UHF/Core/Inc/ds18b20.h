@@ -11,6 +11,10 @@
 #include "main.h"
 #include "stdbool.h"
 
+#define DS18B202_SKIP_ROM	0xCC
+#define DS18B20_READ_SCRATCHPAD 0xBE
+#define DS18B20_CONVERT 0x44
+
 #define set_vdd_low() CLEAR_BIT(GPIOB->ODR, GPIO_ODR_OD2)
 #define set_vdd_high() SET_BIT(GPIOB->ODR, GPIO_ODR_OD2)
 
@@ -23,6 +27,7 @@ void ds18b20_convert();
 float ds18b20_read_temperature();
 void ds18b20_init();
 void delay_us(uint16_t us);
+uint8_t readTemperature();
 
 
 #endif /* INC_DS18B20_H_ */
