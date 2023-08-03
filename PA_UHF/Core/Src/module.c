@@ -20,8 +20,8 @@ POWER_AMPLIFIER_t* paInit() {
 		p->id = MODULE_ADDR;
 		p->att = 0;
 		p->gain = 0;
-		p->pin = 0;
-		p->pout = 0;
+		p->pIn = 0;
+		p->pOut = 0;
 		p->temperature = 0;
 		p->enable = 1;
 		p->status = PA_WAIT;
@@ -46,20 +46,20 @@ void startTimer3(uint8_t seconds) {
 	CLEAR_BIT(TIM3->SR, TIM_SR_UIF);
 }
 
-void module_pa_state_update(POWER_AMPLIFIER_t *pa) {
+void tooglePa(POWER_AMPLIFIER_t *pa) {
 	if (pa->enable == ON) {
 		if (pa->temperatureOut > MAX_TEMPERATURE)
-			pa_off();
+			HAL_GPIO_WritePin(pa->port, pa->pin, GPIO_PIN_RESET);
 		if (pa->temperatureOut < SAFE_TEMPERATURE) {
-			pa_on();
+			HAL_GPIO_WritePin(pa->port, pa->pin, GPIO_PIN_SET);
 			if (pa->vswr > MAX_VSWR)
-				pa_off();
+				HAL_GPIO_WritePin(pa->port, pa->pin, GPIO_PIN_RESET);
 			if (pa->vswr < MAX_VSWR)
-				pa_on();
+				HAL_GPIO_WritePin(pa->port, pa->pin, GPIO_PIN_SET);
 		}
 	}
 	if (pa->enable == OFF)
-		pa_off();
+		HAL_GPIO_WritePin(pa->port, pa->pin, GPIO_PIN_RESET);
 }
 
 void processReceivedSerial(POWER_AMPLIFIER_t *p) {
@@ -115,7 +115,7 @@ uint8_t exec(POWER_AMPLIFIER_t *pa, uint8_t *dataReceived) {
 	case QUERY_PARAMETER_LTEL:
 		dataLen = sizeof(pa->enable) + sizeof(blank) + sizeof(pa->temperature)
 				+ sizeof(pa->gain) + sizeof(pa->vswr) + sizeof(pa->att)
-				+ sizeof(pa->pout) + sizeof(pa->pin);
+				+ sizeof(pa->pOut) + sizeof(pa->pIn);
 		responsePtr = &dataReceived[DATA_START_INDEX];
 		responsePtr = &dataReceived[DATA_START_INDEX];
 		memcpy(responsePtr, &(pa->enable), sizeof(pa->enable));
@@ -130,12 +130,12 @@ uint8_t exec(POWER_AMPLIFIER_t *pa, uint8_t *dataReceived) {
 		responsePtr += sizeof(pa->vswr);
 		memcpy(responsePtr, &(pa->att), sizeof(pa->att));
 		responsePtr += sizeof(pa->att);
-		memcpy(responsePtr, &(pa->pout), sizeof(pa->pout));
-		responsePtr += sizeof(pa->pout);
+		memcpy(responsePtr, &(pa->pOut), sizeof(pa->pOut));
+		responsePtr += sizeof(pa->pOut);
 		memcpy(responsePtr, &(pa->att), sizeof(pa->att));
 		responsePtr += sizeof(pa->att);
-		memcpy(responsePtr, &(pa->pin), sizeof(pa->pin));
-		responsePtr += sizeof(pa->pin);
+		memcpy(responsePtr, &(pa->pIn), sizeof(pa->pIn));
+		responsePtr += sizeof(pa->pIn);
 		break;
 	case QUERY_PARAMETER_STR:
 		printParameters(pa);
@@ -146,15 +146,15 @@ uint8_t exec(POWER_AMPLIFIER_t *pa, uint8_t *dataReceived) {
 	case SET_ATT_LTEL:
 		pa->attenuator->val = dataReceived[DATA_START_INDEX];
 		setAttenuation(pa->attenuator);
-		u->len =
-				sprintf((char*) u->data, "Attenuation %u\r\n", pa->attenuator->val);
+		u->len = sprintf((char*) u->data, "Attenuation %u\r\n",
+				pa->attenuator->val);
 		// Send response via UART
 		SET_BIT(u->dePort->ODR, u->dePin);
 		uartSend(u);
 		CLEAR_BIT(u->dePort->ODR, u->dePin);
 		memset(u->data, 0, sizeof(u->data));
 		u->len = 0;
-		saveData(pa,ATTENUATION);
+		saveData(pa, ATTENUATION);
 //		m24c64_write_N(BASE_ADDR,  &(pa->att), ATT_VALUE_ADDR, 1);
 //		sprintf((char*) uart1.tx_buffer, "Attenuation %u\r\n", pa->att);
 //		uart1_send_frame((char*) uart1.tx_buffer, TX_BUFFLEN);
@@ -195,7 +195,6 @@ uint8_t readEepromData(POWER_AMPLIFIER_t *p, EEPROM_SECTOR_t sector) {
 	return (result);
 }
 
-
 HAL_StatusTypeDef saveData(POWER_AMPLIFIER_t *p, EEPROM_SECTOR_t sector) {
 	I2C_HandleTypeDef *i2c = p->i2c;
 	BDA4601_t *a = p->attenuator;
@@ -223,15 +222,115 @@ HAL_StatusTypeDef saveData(POWER_AMPLIFIER_t *p, EEPROM_SECTOR_t sector) {
 
 }
 
+void paEnableInit(POWER_AMPLIFIER_t *pa) {
+	pa->port = PA_HAB_GPIO_Port;
+	pa->pin = PA_HAB_Pin;
+	HAL_GPIO_WritePin(pa->port, pa->pin, GPIO_PIN_RESET);
+}
 
+void paAdcInit(POWER_AMPLIFIER_t *pa) {
+	pa->adc = adcInit(ADC1);
+	if (pa->adc == NULL)
+		Error_Handler();
+
+	configADC(pa->adc->reg);
+	pa->attenuator = malloc(sizeof(BDA4601_t));
+	if (pa->attenuator == NULL)
+		Error_Handler();
+
+	pa->attenuator->clkPin = CLK_ATT_Pin;
+	pa->attenuator->clkPort = CLK_ATT_GPIO_Port;
+	pa->attenuator->dataPin = DATA_ATT_Pin;
+	pa->attenuator->dataPort = DATA_ATT_GPIO_Port;
+	pa->attenuator->lePin = LE_ATT_Pin;
+	pa->attenuator->lePort = LE_ATT_GPIO_Port;
+	pa->attenuator->val = 0;
+	readEepromData(pa, ATTENUATION);
+	setInitialAttenuation(pa->attenuator, STARTING_MILLIS);
+}
+
+void paUsart1Init(POWER_AMPLIFIER_t *pa) {
+	pa->serial = uart(USART1);
+	pa->serial->handler = NULL;
+	if (pa->serial == NULL)
+		Error_Handler();
+
+	uartInit(pa->serial->reg);
+	pa->serial->dePort = DE_485_GPIO_Port;
+	pa->serial->dePin = DE_485_Pin;
+}
+
+void paLedInit(POWER_AMPLIFIER_t *pa) {
+	pa->led = malloc(LED_CHANNELS * sizeof(LED_INFO_t*));
+	if (pa->led == NULL)
+		Error_Handler();
+
+	for (int i = 0; i < LED_CHANNELS; i++) {
+		pa->led[i] = malloc(sizeof(LED_INFO_t));
+		if (pa->led[i] == NULL)
+			Error_Handler();
+	}
+	pa->led[KEEP_ALIVE]->port = KA_GPIO_Port;
+	pa->led[KEEP_ALIVE]->pin = KA_Pin;
+	pa->led[CURRENT_LOW]->port = CURR_L_GPIO_Port;
+	pa->led[CURRENT_LOW]->pin = CURR_L_Pin;
+	pa->led[CURRENT_HIGH]->port = CURR_H_GPIO_Port;
+	pa->led[CURRENT_HIGH]->pin = CURR_H_Pin;
+	pa->led[CURRENT_NORMAL]->port = CURR_N_GPIO_Port;
+	pa->led[CURRENT_NORMAL]->pin = CURR_N_Pin;
+	pa->led[TEMPERATURE_OK]->port = TEMP_OK_GPIO_Port;
+	pa->led[TEMPERATURE_OK]->pin = TEMP_OK_Pin;
+	pa->led[TEMPERATURE_HIGH]->port = TEMP_HIGH_GPIO_Port;
+	pa->led[TEMPERATURE_HIGH]->pin = TEMP_HIGH_Pin;
+	pa->led[KEEP_ALIVE]->startMillis = HAL_GetTick();
+	pa->led[CURRENT_LOW]->startMillis = 0;
+	pa->led[CURRENT_HIGH]->startMillis = 0;
+	pa->led[CURRENT_NORMAL]->startMillis = 0;
+	pa->led[TEMPERATURE_OK]->startMillis = 0;
+	pa->led[TEMPERATURE_HIGH]->startMillis = 0;
+	for (uint8_t i = 0; i < LED_CHANNELS; i++)
+		HAL_GPIO_WritePin(pa->led[i]->port, pa->led[i]->pin, GPIO_PIN_SET);
+}
+
+void serialRestart(POWER_AMPLIFIER_t *pa, uint16_t timeout) {
+	/* USER CODE END WHILE */
+	/* USER CODE BEGIN 3 */
+	if (HAL_GetTick() - pa->serial->startTicks > timeout) {
+		// Disable UART1
+		USART1->CR1 &= ~USART_CR1_UE;
+		HAL_Delay(1);
+		// Enable UART1
+		USART1->CR1 |= USART_CR1_UE;
+		memset(pa->serial->data, 0, UART_SIZE);
+		pa->serial->len = 0;
+		pa->serial->startTicks = HAL_GetTick();
+	}
+}
+
+void paRawToReal(POWER_AMPLIFIER_t *pa) {
+	pa->temperatureOut = readTemperature();
+	pa->temperature = lm75Read(pa->i2c);
+	pa->pRef = arduino_map_int8(pa->adc->ma[PREF_CH], MAX4003_ADC_MIN,
+	MAX4003_ADC_MAX, -30, 0);
+	pa->pOut = arduino_map_int8(pa->adc->ma[POUT_CH], MAX4003_ADC_MIN,
+	MAX4003_ADC_MAX, -30, 0);
+	pa->current = ADC_CURRENT_FACTOR * pa->adc->ma[CURRENT_CH];
+	pa->current = arduino_map_int8(pa->adc->ma[PIN_CH], 22, 45, 60, 30);
+	pa->gain = arduino_map_int8(pa->adc->ma[PIN_CH], MAX4003_ADC_MIN,
+	MAX4003_ADC_MAX, 0, 30);
+	pa->vswr = vswr_calc(pa->pOut, pa->pRef);
+	pa->pIn = arduino_map_int8(pa->adc->ma[PIN_CH], MAX4003_ADC_MIN,
+	MAX4003_ADC_MAX, -30, 0);
+	pa->voltage = arduino_map_int8(pa->adc->ma[VOLTAGE_CH], 642, 1240, 10, 20);
+}
 
 void printParameters(POWER_AMPLIFIER_t *pa) {
 	UART_t *u = pa->serial;
 	u->len =
 			sprintf((char*) u->data,
 					"Pout %d[dBm] Att %u[dB] Gain %u[dB] Pin %d[dBm] Curent %d[mA] Voltage %u[V]\r\n",
-					pa->pout, pa->attenuator->val, pa->gain, pa->pin, pa->current,
-					(uint8_t) pa->voltage);
+					pa->pOut, pa->attenuator->val, pa->gain, pa->pIn,
+					pa->current, (uint8_t) pa->voltage);
 	// Send response via UART
 	SET_BIT(u->dePort->ODR, u->dePin);
 	uartSend(u);
@@ -253,15 +352,6 @@ void printRaw(POWER_AMPLIFIER_t *pa) {
 	CLEAR_BIT(u->dePort->ODR, u->dePin);
 	memset(u->data, 0, sizeof(u->data));
 	u->len = 0;
-}
-
-void print_parameters(UART1_t *u, POWER_AMPLIFIER_t *pa) {
-	sprintf((char*) u->tx_buffer,
-			"Pout %d[dBm] Att %u[dB] Gain %u[dB] Pin %d[dBm] Curent %d[mA] Voltage %u[V]\r\n",
-			pa->pout, pa->att, pa->gain, pa->pin, pa->current,
-			(uint8_t) pa->voltage);
-	uart1_send_frame((char*) u->tx_buffer, TX_BUFFLEN);
-	uart1_clean_buffer(u);
 }
 
 float vswr_calc(int8_t pf, int8_t pr) {
@@ -308,8 +398,8 @@ void rs485_set_query_frame(POWER_AMPLIFIER_t *pa) {
 		response[9] = pa->gain;
 		response[10] = pa->vswr;
 		response[11] = pa->att;
-		response[12] = pa->pout;
-		response[13] = pa->pin;
+		response[12] = pa->pOut;
+		response[13] = pa->pIn;
 
 		break;
 	case QUERY_PARAMETER_SIGMA:
@@ -321,8 +411,8 @@ void rs485_set_query_frame(POWER_AMPLIFIER_t *pa) {
 		response[9] = pa->gain;
 		response[10] = pa->vswr;
 		response[11] = pa->att;
-		response[12] = pa->pout;
-		response[13] = pa->pin;
+		response[12] = pa->pOut;
+		response[13] = pa->pIn;
 	default:
 		response[0] = 0;
 	}

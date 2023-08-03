@@ -83,6 +83,8 @@ void Error_Handler(void);
 #define TEMP_HIGH_GPIO_Port GPIOA
 #define TEMP_OK_Pin GPIO_PIN_9
 #define TEMP_OK_GPIO_Port GPIOA
+#define KA_Pin GPIO_PIN_6
+#define KA_GPIO_Port GPIOC
 #define CURR_H_Pin GPIO_PIN_10
 #define CURR_H_GPIO_Port GPIOA
 #define CURR_N_Pin GPIO_PIN_11

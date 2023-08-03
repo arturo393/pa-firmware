@@ -22,13 +22,10 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <string.h>
-#include <uart1.h>
 #include "utils.h"
 #include "module.h"
 #include "ad8363.h"
-#include "max4003.h"
-#include "lm75.h"
-#include "ds18b20.h"
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -74,16 +71,6 @@ static void MX_USART1_UART_Init(void);
 // UART1 interrupt handler
 void TIM3_IRQHandler(void) {
 	CLEAR_BIT(TIM3->SR, TIM_SR_UIF);
-	LED_t l = pa->led;
-
-	if (l->ka > LED_KA_STATE_TIMEOUT)
-		l->ka++;
-	else {
-		if (HAL_GetTick() - l->ka > LED_KA_ON_TIMEOUT)
-			sys_rp_led_off();
-		else
-			sys_rp_led_on();
-	}
 }
 
 // UART1 interrupt handler
@@ -114,6 +101,9 @@ void USART1_IRQHandler(void) {
 /* USER CODE BEGIN 0 */
 // First, create an MCP4725 object:
 uint32_t micro_seconds = 0;
+
+
+
 /* USER CODE END 0 */
 
 /**
@@ -155,34 +145,12 @@ int main(void) {
 	if (pa == NULL)
 		Error_Handler();
 
-	HAL_GPIO_WritePin(PA_HAB_GPIO_Port, PA_HAB_Pin, GPIO_PIN_RESET);
 	pa->i2c = &hi2c1;
 
-	pa->adc = adcInit(ADC1);
-	if (pa->adc == NULL)
-		Error_Handler();
-	configADC(pa->adc->reg);
-
-	pa->attenuator = malloc(sizeof(BDA4601_t));
-	if (pa->attenuator == NULL)
-		Error_Handler();
-	pa->attenuator->clkPin = CLK_ATT_Pin;
-	pa->attenuator->clkPort = CLK_ATT_GPIO_Port;
-	pa->attenuator->dataPin = DATA_ATT_Pin;
-	pa->attenuator->dataPort = DATA_ATT_GPIO_Port;
-	pa->attenuator->lePin = LE_ATT_Pin;
-	pa->attenuator->lePort = LE_ATT_GPIO_Port;
-	pa->attenuator->val = 0;
-	readEepromData(pa, ATTENUATION);
-	setInitialAttenuation(pa->attenuator, STARTING_MILLIS);
-
-	pa->serial = uart(USART1);
-	pa->serial->handler = NULL;
-	if (pa->serial == NULL)
-		Error_Handler();
-	uartInit(pa->serial->reg);
-	pa->serial->dePort = DE_485_GPIO_Port;
-	pa->serial->dePin = DE_485_Pin;
+	paEnableInit(pa);
+	paAdcInit(pa);
+	paUsart1Init(pa);
+	paLedInit(pa);
 
 	pa->poutDac = MCP4725_init(&hi2c1, MCP4706_CHIP_ADDR, REFERENCE_VOLTAGE);
 	float storedVoltage = MCP4725_getVoltage(pa->poutDac);
@@ -196,59 +164,27 @@ int main(void) {
 	res = lm75Init(pa->i2c);
 	if (res != HAL_OK)
 		Error_Handler();
-	// Second, initilaize the MCP4725 object:
+
 	startTimer3(1);
 	ds18b20_init();
-	//led_init(&led);
-
-	ADC1->CR |= ADC_CR_ADSTART; // Start ADC conversion
-	// Check the connection:
 	/* USER CODE END 2 */
-	HAL_GPIO_WritePin(PA_HAB_GPIO_Port, PA_HAB_Pin, GPIO_PIN_SET);
+
 	/* Infinite loop */
 	/* USER CODE BEGIN WHILE */
 	while (1) {
 		/* USER CODE END WHILE */
 
 		/* USER CODE BEGIN 3 */
-		if (HAL_GetTick() - pa->serial->startTicks > 5000) {
-			// Disable UART1
-			USART1->CR1 &= ~USART_CR1_UE;
-			HAL_Delay(1);
-			// Enable UART1
-			USART1->CR1 |= USART_CR1_UE;
-			memset(pa->serial->data, 0, UART_SIZE);
-			pa->serial->len = 0;
-			pa->serial->startTicks = HAL_GetTick();
-		}
+		serialRestart(pa,5000);
 		processReceivedSerial(pa);
-
-
 		readADC(pa->adc);
 		movingAverage(pa->adc);
 		ds18b20_convert();
-		pa->temperatureOut = readTemperature();
-		pa->temperature = lm75Read(pa->i2c);
-		pa->pr = arduino_map_int8(pa->adc->ma[PREF_CH], MAX4003_ADC_MIN,
-		MAX4003_ADC_MAX, -30, 0);
-		pa->pout = arduino_map_int8(pa->adc->ma[POUT_CH],
-		MAX4003_ADC_MIN,
-		MAX4003_ADC_MAX, -30, 0);
-		pa->current = ADC_CURRENT_FACTOR * pa->adc->ma[CURRENT_CH];
-		pa->current = arduino_map_int8(pa->adc->ma[PIN_CH], 22, 45, 60, 30);
-		pa->gain = arduino_map_int8(pa->adc->ma[PIN_CH], MAX4003_ADC_MIN,
-		MAX4003_ADC_MAX, 0, 30);
-		pa->vswr = vswr_calc(pa->pout, pa->pr);
-		pa->pin = arduino_map_int8(pa->adc->ma[PIN_CH], MAX4003_ADC_MIN,
-		MAX4003_ADC_MAX, -30, 0);
-		pa->voltage = arduino_map_int8(pa->adc->ma[VOLTAGE_CH], 642, 1240, 10,
-				20);
-		//module_pa_state_update(pa);
-
-		//led_current_update(pa->current);
-		led_enable_kalive(&led);
-		//led_temperature_update(pa->temperature);
-
+		paRawToReal(pa);
+		currentUpdate(pa->led, pa->current);
+		kaUpdate(pa->led[KEEP_ALIVE]);
+		temperatureUpdate(pa->led, pa->temperature);
+		tooglePa(pa);
 		/* USER CODE END WHILE */
 
 		/* USER CODE BEGIN 3 */
@@ -546,7 +482,7 @@ static void MX_GPIO_Init(void) {
 			GPIO_PIN_RESET);
 
 	/*Configure GPIO pin Output Level */
-	HAL_GPIO_WritePin(GPIOC, GPIO_PIN_6, GPIO_PIN_RESET);
+	HAL_GPIO_WritePin(KA_GPIO_Port, KA_Pin, GPIO_PIN_RESET);
 
 	/*Configure GPIO pins : PA_HAB_Pin LE_ATT_Pin TEMP_HIGH_Pin TEMP_OK_Pin
 	 CURR_H_Pin CURR_N_Pin CURR_L_Pin */
@@ -564,12 +500,12 @@ static void MX_GPIO_Init(void) {
 	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
 	HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-	/*Configure GPIO pin : PC6 */
-	GPIO_InitStruct.Pin = GPIO_PIN_6;
+	/*Configure GPIO pin : KA_Pin */
+	GPIO_InitStruct.Pin = KA_Pin;
 	GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
 	GPIO_InitStruct.Pull = GPIO_NOPULL;
 	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-	HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+	HAL_GPIO_Init(KA_GPIO_Port, &GPIO_InitStruct);
 
 	/* USER CODE BEGIN MX_GPIO_Init_2 */
 	/* USER CODE END MX_GPIO_Init_2 */
