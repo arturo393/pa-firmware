@@ -52,6 +52,12 @@
 
 #define MAX4003_IS_CALIBRATED 0xAA
 
+typedef enum{
+	POUT_LOW,
+	POUT_MEDIUM,
+	POUT_HIGH
+}POUT_LEVEL_t;
+
 typedef enum {
 	ATTENUATION,
 	BANDWITH,
@@ -67,9 +73,8 @@ typedef enum {
 } EEPROM_SECTOR_t;
 
 typedef enum {
-	PA_UPDATE, PA_WAIT
-
-} Status_t;
+	PA_UPDATE, PA_WAIT, PA_ERROR,PA_OK
+} PA_STATUS_t;
 
 typedef enum MODULE_ID {
 	ID0 = 0x00, ID8 = 0x08, ID9 = 0X09
@@ -81,19 +86,20 @@ typedef enum MODULE_S {
 
 typedef struct MODULE {
 	uint8_t att;
-	uint8_t gain;
-	int8_t pOut;
-	int8_t pRef;
-	uint8_t voltage;
-	int8_t pIn;
-	uint16_t current;
+	float gain;
+	float pOut;
+	float pRef;
+	float voltage;
+	float pIn;
+	float current;
 	uint8_t enable;
-	uint8_t temperature;
-	uint8_t temperatureOut;
-	uint8_t vswr;
+	float temperature;
+	float temperatureOut;
+	float vswr;
+	POUT_LEVEL_t pOutLevel;
 	uint8_t id;
 	uint8_t function;
-	Status_t status;
+	PA_STATUS_t status;
 	GPIO_TypeDef *port;
 	uint16_t pin;
 	ADC_t *adc;
@@ -111,6 +117,9 @@ extern const float ADC_CURRENT_FACTOR;
 extern const float ADC_VOLTAGE_FACTOR;
 extern const uint8_t MCP4706_CHIP_ADDR;
 extern const float REFERENCE_VOLTAGE;
+extern const float MINIMUM_POWER;
+extern const float MAXIMUM_POWER;
+extern const float pow_table[];
 
 POWER_AMPLIFIER_t* paInit();
 void module_calc_parameters(POWER_AMPLIFIER_t m, uint16_t *media_array);
@@ -119,7 +128,7 @@ void tooglePa(POWER_AMPLIFIER_t *pa);
 void print_parameters(UART1_t *u, POWER_AMPLIFIER_t *pa);
 void printParameters(POWER_AMPLIFIER_t *pa);
 void printRaw(POWER_AMPLIFIER_t *pa);
-float vswr_calc(int8_t pf, int8_t pr);
+float vswrCalc(float pf_db, float pr_db);
 float arduino_map_float(uint16_t value, uint16_t in_min, uint16_t in_max,
 		float out_min, float out_max);
 int8_t arduino_map_int8(uint16_t value, uint16_t in_min, uint16_t in_max,
@@ -130,9 +139,11 @@ uint8_t exec(POWER_AMPLIFIER_t *pa, uint8_t *dataReceived);
 uint8_t readEepromData(POWER_AMPLIFIER_t *p, EEPROM_SECTOR_t sector);
 HAL_StatusTypeDef saveData(POWER_AMPLIFIER_t *p, EEPROM_SECTOR_t sector);
 void paEnableInit(POWER_AMPLIFIER_t *pa);
+void paAtteunatorInit(POWER_AMPLIFIER_t *pa);
 void paAdcInit(POWER_AMPLIFIER_t *pa);
 void paUsart1Init(POWER_AMPLIFIER_t *pa);
 void paLedInit(POWER_AMPLIFIER_t *pa);
 void serialRestart(POWER_AMPLIFIER_t *pa, uint16_t timeout);
 void paRawToReal(POWER_AMPLIFIER_t *pa);
+PA_STATUS_t setDacLevel(POWER_AMPLIFIER_t *pa, POUT_LEVEL_t level);
 #endif /* INC_LTEL_H_ */

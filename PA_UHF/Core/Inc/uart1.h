@@ -33,7 +33,6 @@ typedef struct UART1 {
 	uint8_t tx_buffer[RX_BUFFLEN];
 	uint8_t rx_count;
 	uint32_t timeout;
-	UART_HandleTypeDef *uart;
 } UART1_t;
 
 typedef struct {
@@ -41,7 +40,6 @@ typedef struct {
 	uint8_t len;
 	uint32_t operationTimeout;
 	UART_Status status;
-	UART_HandleTypeDef *handler;
 	uint32_t startTicks;
 	GPIO_TypeDef* dePort;
 	uint16_t dePin;

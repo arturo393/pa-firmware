@@ -407,7 +407,7 @@ uint8_t MCP4725_writeComand(MCP4725 *_MCP4725, uint16_t value,
 	}
 
 	if (I2C_Stat != HAL_OK)
-		return 0;          //send data over i2c & check for collision on i2c bus
+		return (0);          //send data over i2c & check for collision on i2c bus
 
 	if (mode == MCP4725_EEPROM_MODE) {
 		if (MCP4725_getEepromBusyFlag(_MCP4725) == 1)
@@ -418,7 +418,7 @@ uint8_t MCP4725_writeComand(MCP4725 *_MCP4725, uint16_t value,
 		HAL_Delay(MCP4725_EEPROM_WRITE_TIME); //maximum EEPROM write time 25 + 25 = 50 msec
 	}
 
-	return 1;                                                       //success!!!
+	return (1);                                                       //success!!!
 }
 
 /**************************************************************************/

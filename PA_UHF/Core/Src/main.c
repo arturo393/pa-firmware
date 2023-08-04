@@ -49,8 +49,6 @@ I2C_HandleTypeDef hi2c1;
 
 IWDG_HandleTypeDef hiwdg;
 
-UART_HandleTypeDef huart1;
-
 /* USER CODE BEGIN PV */
 
 #define LED_PIN PB1
@@ -66,7 +64,6 @@ static void MX_GPIO_Init(void);
 static void MX_ADC1_Init(void);
 static void MX_IWDG_Init(void);
 static void MX_I2C1_Init(void);
-static void MX_USART1_UART_Init(void);
 /* USER CODE BEGIN PFP */
 // UART1 interrupt handler
 void TIM3_IRQHandler(void) {
@@ -102,8 +99,6 @@ void USART1_IRQHandler(void) {
 // First, create an MCP4725 object:
 uint32_t micro_seconds = 0;
 
-
-
 /* USER CODE END 0 */
 
 /**
@@ -133,13 +128,13 @@ int main(void) {
 
 	/* Initialize all configured peripherals */
 	MX_GPIO_Init();
-//  MX_ADC1_Init();
-//  MX_IWDG_Init();
+//	MX_ADC1_Init();
+//	MX_IWDG_Init();
 	MX_I2C1_Init();
-//  MX_USART1_UART_Init();
 	/* USER CODE BEGIN 2 */
 
 	HAL_StatusTypeDef res;
+	PA_STATUS_t status;
 
 	pa = paInit();
 	if (pa == NULL)
@@ -148,17 +143,17 @@ int main(void) {
 	pa->i2c = &hi2c1;
 
 	paEnableInit(pa);
+	paAtteunatorInit(pa);
 	paAdcInit(pa);
 	paUsart1Init(pa);
 	paLedInit(pa);
 
-	pa->poutDac = MCP4725_init(&hi2c1, MCP4706_CHIP_ADDR, REFERENCE_VOLTAGE);
-	float storedVoltage = MCP4725_getVoltage(pa->poutDac);
-	float newVoltage = 1.5;
-	if (fabs(storedVoltage - newVoltage) > EPSILON) {
-		MCP4725_setVoltage(pa->poutDac, newVoltage, MCP4725_EEPROM_MODE,
-				MCP4725_POWER_DOWN_OFF);
-	}
+	pa->poutDac = MCP4725_init(pa->i2c, MCP4706_CHIP_ADDR, REFERENCE_VOLTAGE);
+	status = setDacLevel(pa, POUT_LOW);
+	if (status != PA_OK)
+		Error_Handler();
+
+
 
 	HAL_Delay(100);
 	res = lm75Init(pa->i2c);
@@ -175,7 +170,7 @@ int main(void) {
 		/* USER CODE END WHILE */
 
 		/* USER CODE BEGIN 3 */
-		serialRestart(pa,5000);
+		serialRestart(pa, 5000);
 		processReceivedSerial(pa);
 		readADC(pa->adc);
 		movingAverage(pa->adc);
@@ -413,51 +408,6 @@ static void MX_IWDG_Init(void) {
 }
 
 /**
- * @brief USART1 Initialization Function
- * @param None
- * @retval None
- */
-static void MX_USART1_UART_Init(void) {
-
-	/* USER CODE BEGIN USART1_Init 0 */
-
-	/* USER CODE END USART1_Init 0 */
-
-	/* USER CODE BEGIN USART1_Init 1 */
-
-	/* USER CODE END USART1_Init 1 */
-	huart1.Instance = USART1;
-	huart1.Init.BaudRate = 115200;
-	huart1.Init.WordLength = UART_WORDLENGTH_8B;
-	huart1.Init.StopBits = UART_STOPBITS_1;
-	huart1.Init.Parity = UART_PARITY_NONE;
-	huart1.Init.Mode = UART_MODE_TX_RX;
-	huart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
-	huart1.Init.OverSampling = UART_OVERSAMPLING_16;
-	huart1.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
-	huart1.Init.ClockPrescaler = UART_PRESCALER_DIV1;
-	huart1.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
-	if (HAL_UART_Init(&huart1) != HAL_OK) {
-		Error_Handler();
-	}
-	if (HAL_UARTEx_SetTxFifoThreshold(&huart1, UART_TXFIFO_THRESHOLD_1_8)
-			!= HAL_OK) {
-		Error_Handler();
-	}
-	if (HAL_UARTEx_SetRxFifoThreshold(&huart1, UART_RXFIFO_THRESHOLD_1_8)
-			!= HAL_OK) {
-		Error_Handler();
-	}
-	if (HAL_UARTEx_DisableFifoMode(&huart1) != HAL_OK) {
-		Error_Handler();
-	}
-	/* USER CODE BEGIN USART1_Init 2 */
-
-	/* USER CODE END USART1_Init 2 */
-
-}
-
-/**
  * @brief GPIO Initialization Function
  * @param None
  * @retval None
@@ -506,6 +456,14 @@ static void MX_GPIO_Init(void) {
 	GPIO_InitStruct.Pull = GPIO_NOPULL;
 	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
 	HAL_GPIO_Init(KA_GPIO_Port, &GPIO_InitStruct);
+
+	/*Configure GPIO pins : PB6 PB7 */
+	GPIO_InitStruct.Pin = GPIO_PIN_6 | GPIO_PIN_7;
+	GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+	GPIO_InitStruct.Pull = GPIO_NOPULL;
+	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+	GPIO_InitStruct.Alternate = GPIO_AF0_USART1;
+	HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
 	/* USER CODE BEGIN MX_GPIO_Init_2 */
 	/* USER CODE END MX_GPIO_Init_2 */
