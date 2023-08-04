@@ -131,10 +131,10 @@ int main(void) {
 //	MX_ADC1_Init();
 //	MX_IWDG_Init();
 	MX_I2C1_Init();
+
 	/* USER CODE BEGIN 2 */
 
 	HAL_StatusTypeDef res;
-	PA_STATUS_t status;
 
 	pa = paInit();
 	if (pa == NULL)
@@ -148,13 +148,7 @@ int main(void) {
 	paUsart1Init(pa);
 	paLedInit(pa);
 
-	pa->poutDac = MCP4725_init(pa->i2c, MCP4706_CHIP_ADDR, REFERENCE_VOLTAGE);
-	status = setDacLevel(pa, POUT_LOW);
-	if (status != PA_OK)
-		Error_Handler();
-
-
-
+	paDacInit(pa);
 	HAL_Delay(100);
 	res = lm75Init(pa->i2c);
 	if (res != HAL_OK)
@@ -176,9 +170,9 @@ int main(void) {
 		movingAverage(pa->adc);
 		ds18b20_convert();
 		paRawToReal(pa);
-		currentUpdate(pa->led, pa->current);
+		currentUpdate(pa->led, pa->curr);
 		kaUpdate(pa->led[KEEP_ALIVE]);
-		temperatureUpdate(pa->led, pa->temperature);
+		temperatureUpdate(pa->led, pa->temp);
 		tooglePa(pa);
 		/* USER CODE END WHILE */
 

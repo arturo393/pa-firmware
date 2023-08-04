@@ -104,7 +104,7 @@ void setAttenuation(BDA4601_t *b) {
 	for (uint8_t i = 0; i < TIMES; i++) {
 		uint8_t mask = 0b00100000;
 		for (uint8_t j = 0; j < 6; j++) {
-			if (mask & b->val)
+			if (mask & val)
 				HAL_GPIO_WritePin(b->dataPort, b->dataPin, GPIO_PIN_SET); //Pin data en alto
 			 else
 				HAL_GPIO_WritePin(b->dataPort, b->dataPin, GPIO_PIN_RESET); //Pin data en bajo

@@ -45,6 +45,21 @@
 #define AOUT_0_20mA_OFFSET 4
 #define DOUT_OFFSET 6
 
+#define POUT_CH_L   400
+#define POUT_CH_H   700
+#define POUT_REAL_L -30.0
+#define POUT_REAL_H 0.0
+
+#define CURR_CH_L   700
+#define CURR_CH_H   700
+#define CURR_REAL_L 400
+#define CURR_REAL_H 460
+
+#define VOLT_CH_L   779
+#define VOLT_CH_H   1303
+#define VOLT_REAL_L 12.39
+#define VOLT_REAL_H 21.25
+
 #define MAX4003_DBM_MAX 0
 #define MAX4003_DBM_MIN -30
 #define MAX4003_ADC_MAX ((uint16_t) 1888)
@@ -55,6 +70,7 @@
 typedef enum{
 	POUT_LOW,
 	POUT_MEDIUM,
+	POUT_NORMAL,
 	POUT_HIGH
 }POUT_LEVEL_t;
 
@@ -89,12 +105,12 @@ typedef struct MODULE {
 	float gain;
 	float pOut;
 	float pRef;
-	float voltage;
+	float vol;
 	float pIn;
-	float current;
+	float curr;
 	uint8_t enable;
-	float temperature;
-	float temperatureOut;
+	float temp;
+	float tempOut;
 	float vswr;
 	POUT_LEVEL_t pOutLevel;
 	uint8_t id;
@@ -131,7 +147,9 @@ void printRaw(POWER_AMPLIFIER_t *pa);
 float vswrCalc(float pf_db, float pr_db);
 float arduino_map_float(uint16_t value, uint16_t in_min, uint16_t in_max,
 		float out_min, float out_max);
-int8_t arduino_map_int8(uint16_t value, uint16_t in_min, uint16_t in_max,
+uint16_t arduino_map_uint16_t(uint16_t value, uint16_t in_min, uint16_t in_max,
+		uint16_t out_min, uint16_t out_max);
+int8_t arduino_map_int8_t(uint16_t value, uint16_t in_min, uint16_t in_max,
 		int8_t out_min, int8_t out_max);
 void rs485_set_query_frame(POWER_AMPLIFIER_t *module);
 void processReceivedSerial(POWER_AMPLIFIER_t *p);
@@ -143,6 +161,7 @@ void paAtteunatorInit(POWER_AMPLIFIER_t *pa);
 void paAdcInit(POWER_AMPLIFIER_t *pa);
 void paUsart1Init(POWER_AMPLIFIER_t *pa);
 void paLedInit(POWER_AMPLIFIER_t *pa);
+void paDacInit(POWER_AMPLIFIER_t *pa);
 void serialRestart(POWER_AMPLIFIER_t *pa, uint16_t timeout);
 void paRawToReal(POWER_AMPLIFIER_t *pa);
 PA_STATUS_t setDacLevel(POWER_AMPLIFIER_t *pa, POUT_LEVEL_t level);

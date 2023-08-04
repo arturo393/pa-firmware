@@ -11,6 +11,7 @@
 #include "main.h"
 #include "stdbool.h"
 #include "stdlib.h"
+#include "string.h"
 
 #define adc_start_conversion() SET_BIT(ADC1->CR,ADC_CR_ADSTART)
 #define SAMPLES  20

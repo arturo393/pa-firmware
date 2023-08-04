@@ -51,7 +51,6 @@ void performADCRead(ADC_t *adc) {
 
 	SET_BIT(adc->reg->ISR, ADC_ISR_EOSEQ);
 	adc->reg->CR |= ADC_CR_ADSTART; /* Start the ADC conversion */
-	uint8_t timeout = 0;
 	uint16_t ISR_EOC = 0;
 	uint64_t ISER_EOC_MAX = HAL_MAX_DELAY;
 	int i = 0;
@@ -74,7 +73,6 @@ void performADCRead(ADC_t *adc) {
 
 void readADC(ADC_t *adc) {
 	int i = 0;
-	uint8_t timeout = 0;
 	uint16_t ISR_EOC = 0;
 	uint16_t ISER_EOC_MAX = 6000;
 	while (i < ADC_CHANNELS) {

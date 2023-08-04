@@ -22,7 +22,7 @@ POWER_AMPLIFIER_t* paInit() {
 		p->gain = 0;
 		p->pIn = 0;
 		p->pOut = 0;
-		p->temperature = 0;
+		p->temp = 0;
 		p->enable = 1;
 		p->status = PA_WAIT;
 	}
@@ -47,19 +47,21 @@ void startTimer3(uint8_t seconds) {
 }
 
 void tooglePa(POWER_AMPLIFIER_t *pa) {
+	GPIO_PinState state;
 	if (pa->enable == ON) {
-		if (pa->temperatureOut > MAX_TEMPERATURE)
-			HAL_GPIO_WritePin(pa->port, pa->pin, GPIO_PIN_RESET);
-		if (pa->temperatureOut < SAFE_TEMPERATURE) {
-			HAL_GPIO_WritePin(pa->port, pa->pin, GPIO_PIN_SET);
+		if (pa->tempOut > MAX_TEMPERATURE)
+			state = GPIO_PIN_RESET;
+		if (pa->tempOut < SAFE_TEMPERATURE) {
+			state = GPIO_PIN_SET;
 			if (pa->vswr > MAX_VSWR)
-				HAL_GPIO_WritePin(pa->port, pa->pin, GPIO_PIN_RESET);
+				state = GPIO_PIN_RESET;
 			if (pa->vswr < MAX_VSWR)
-				HAL_GPIO_WritePin(pa->port, pa->pin, GPIO_PIN_SET);
+				state = GPIO_PIN_SET;
 		}
 	}
 	if (pa->enable == OFF)
-		HAL_GPIO_WritePin(pa->port, pa->pin, GPIO_PIN_RESET);
+		state = GPIO_PIN_RESET;
+	HAL_GPIO_WritePin(pa->port, pa->pin, pa->enable);
 }
 
 void processReceivedSerial(POWER_AMPLIFIER_t *p) {
@@ -100,9 +102,10 @@ uint8_t exec(POWER_AMPLIFIER_t *pa, uint8_t *dataReceived) {
 	uint8_t *response = dataReceived;
 	uint8_t *responsePtr;
 	uint8_t blank = 0x00;
+	POUT_LEVEL_t pOutLevel;
 	switch (response[CMD_INDEX]) {
 	case QUERY_PARAMETER_LTEL:
-		dataLen = sizeof(pa->enable) + sizeof(blank) + sizeof(pa->temperature)
+		dataLen = sizeof(pa->enable) + sizeof(blank) + sizeof(pa->temp)
 				+ sizeof(pa->gain) + sizeof(pa->vswr) + sizeof(pa->att)
 				+ sizeof(pa->pOut) + sizeof(pa->pIn);
 		responsePtr = &dataReceived[DATA_START_INDEX];
@@ -111,8 +114,8 @@ uint8_t exec(POWER_AMPLIFIER_t *pa, uint8_t *dataReceived) {
 		responsePtr += sizeof(pa->enable);
 		memcpy(responsePtr, &blank, sizeof(blank));
 		responsePtr += sizeof(blank);
-		memcpy(responsePtr, &(pa->temperature), sizeof(pa->temperature));
-		responsePtr += sizeof(pa->temperature);
+		memcpy(responsePtr, &(pa->temp), sizeof(pa->temp));
+		responsePtr += sizeof(pa->temp);
 		memcpy(responsePtr, &(pa->gain), sizeof(pa->gain));
 		responsePtr += sizeof(pa->gain);
 		memcpy(responsePtr, &(pa->vswr), sizeof(pa->vswr));
@@ -137,7 +140,7 @@ uint8_t exec(POWER_AMPLIFIER_t *pa, uint8_t *dataReceived) {
 		setAttenuation(pa->attenuator);
 		u->len = sprintf((char*) u->data, "Attenuation %u\r\n",
 				pa->attenuator->val);
-		bda4601_set_att(pa->attenuator->val, 3);
+		//bda4601_set_att(pa->attenuator->val, 3);
 		// Send response via UART
 		SET_BIT(u->dePort->ODR, u->dePin);
 		uartSend(u);
@@ -150,8 +153,8 @@ uint8_t exec(POWER_AMPLIFIER_t *pa, uint8_t *dataReceived) {
 		pa->enable = dataReceived[DATA_LENGHT2_INDEX];
 		break;
 	case SET_POUTLEVEL:
-		pa->pOutLevel = dataReceived[DATA_START_INDEX];
-		pa->status = setDacLevel(pa, pa->pOutLevel);
+		pOutLevel = dataReceived[DATA_START_INDEX];
+		pa->status = setDacLevel(pa, pOutLevel);
 		if (pa->status != PA_OK)
 			dataReceived[DATA_START_INDEX] = 0xFF;
 		pa->status = PA_WAIT;
@@ -287,6 +290,14 @@ void paLedInit(POWER_AMPLIFIER_t *pa) {
 		HAL_GPIO_WritePin(pa->led[i]->port, pa->led[i]->pin, GPIO_PIN_SET);
 }
 
+void paDacInit(POWER_AMPLIFIER_t *pa) {
+	PA_STATUS_t status;
+	pa->poutDac = MCP4725_init(pa->i2c, MCP4706_CHIP_ADDR, REFERENCE_VOLTAGE);
+	status = setDacLevel(pa, POUT_NORMAL);
+	if (status != PA_OK)
+		Error_Handler();
+}
+
 void serialRestart(POWER_AMPLIFIER_t *pa, uint16_t timeout) {
 	/* USER CODE END WHILE */
 	/* USER CODE BEGIN 3 */
@@ -304,21 +315,29 @@ void serialRestart(POWER_AMPLIFIER_t *pa, uint16_t timeout) {
 
 void paRawToReal(POWER_AMPLIFIER_t *pa) {
 	ADC_t *a = pa->adc;
-	pa->temperatureOut = readTemperature();
-	pa->temperature = lm75Read(pa->i2c);
-	pa->pRef = arduino_map_float(a->ma[PREF_CH], MAX4003_ADC_MIN,
-	MAX4003_ADC_MAX, -30.0, 0.0);
-	pa->pOut = arduino_map_float(a->ma[POUT_CH], MAX4003_ADC_MIN,
-	MAX4003_ADC_MAX, -30.0, -10.0);
 
-	pa->gain = arduino_map_float(a->ma[PIN_CH], MAX4003_ADC_MIN,
-	MAX4003_ADC_MAX, 0.0, 30.0);
+	// Map power values
+	pa->pRef = arduino_map_float(a->ma[POUT_CH], POUT_CH_L, POUT_CH_H,
+	POUT_REAL_L, POUT_REAL_H);
+	pa->pOut = arduino_map_float(a->ma[POUT_CH], POUT_CH_L, POUT_CH_H,
+	POUT_REAL_L, POUT_REAL_H);
+	pa->gain = arduino_map_float(a->ma[POUT_CH], POUT_CH_L, POUT_CH_H,
+	POUT_REAL_L, POUT_REAL_H);
+	pa->pIn = arduino_map_float(a->ma[POUT_CH], POUT_CH_L, POUT_CH_H,
+	POUT_REAL_L, POUT_REAL_H);
+
+	// Calculate VSWR
 	pa->vswr = vswrCalc(pa->pOut, pa->pRef);
-	pa->pIn = arduino_map_float(a->ma[PIN_CH], MAX4003_ADC_MIN,
-	MAX4003_ADC_MAX, -30.0, 0.0);
 
-	pa->current = arduino_map_float(a->ma[PIN_CH], 705, 626, 400, 460);
-	pa->voltage = arduino_map_float(a->ma[VOLTAGE_CH], 779, 1303, 12.39, 21.25);
+	// Map current and voltage values
+	pa->curr = arduino_map_uint16_t(a->ma[PIN_CH], CURR_CH_L, CURR_CH_H,
+	CURR_REAL_L, CURR_REAL_H);
+	pa->vol = arduino_map_float(a->ma[VOLTAGE_CH], VOLT_CH_L, VOLT_CH_H,
+	VOLT_REAL_L, VOLT_REAL_H);
+
+	// Read temperature values
+	pa->tempOut = readTemperature();
+	pa->temp = lm75Read(pa->i2c);
 }
 
 void printParameters(POWER_AMPLIFIER_t *pa) {
@@ -326,8 +345,8 @@ void printParameters(POWER_AMPLIFIER_t *pa) {
 	u->len =
 			sprintf((char*) u->data,
 					"Pout %d[dBm] Att %u[dB] Gain %u[dB] Pin %d[dBm] Curent %d[mA] Voltage %u[V]\r\n",
-					pa->pOut, pa->attenuator->val, pa->gain, pa->pIn,
-					pa->current, (uint8_t) pa->voltage);
+					(int8_t) pa->pOut, pa->attenuator->val, (int8_t) pa->gain,
+					(int8_t) pa->pIn, (uint16_t) pa->curr, (uint8_t) pa->vol);
 	// Send response via UART
 	SET_BIT(u->dePort->ODR, u->dePin);
 	uartSend(u);
@@ -380,6 +399,11 @@ float arduino_map_float(uint16_t value, uint16_t in_min, uint16_t in_max,
 	return ((value - in_min) * (out_max - out_min) / (in_max - in_min) + out_min);
 }
 
+uint16_t arduino_map_uint16_t(uint16_t value, uint16_t in_min, uint16_t in_max,
+		uint16_t out_min, uint16_t out_max) {
+	return ((value - in_min) * (out_max - out_min) / (in_max - in_min) + out_min);
+}
+
 int8_t arduino_map_int8(uint16_t value, uint16_t in_min, uint16_t in_max,
 		int8_t out_min, int8_t out_max) {
 	return ((value - in_min) * (out_max - out_min) / (in_max - in_min) + out_min);
@@ -397,11 +421,14 @@ PA_STATUS_t setDacLevel(POWER_AMPLIFIER_t *pa, POUT_LEVEL_t level) {
 	case (POUT_MEDIUM):
 		newVoltage = 2.01;
 		break;
+	case (POUT_NORMAL):
+		newVoltage = 2.2;
+		break;
 	case (POUT_HIGH):
 		newVoltage = 2.35;
 		break;
 	default:
-		newVoltage = 2.01;
+		newVoltage = 2.2;
 		break;
 	}
 	float storedVoltage = MCP4725_getVoltage(pa->poutDac);
@@ -410,5 +437,7 @@ PA_STATUS_t setDacLevel(POWER_AMPLIFIER_t *pa, POUT_LEVEL_t level) {
 		res = MCP4725_setVoltage(pa->poutDac, newVoltage, MCP4725_EEPROM_MODE,
 				MCP4725_POWER_DOWN_OFF);
 	status = (res == 1) ? PA_OK : PA_ERROR;
+	if (PA_OK)
+		pa->pOutLevel = level;
 	return (status);
 }

@@ -31,6 +31,7 @@
 
 #include "main.h"
 #include <math.h>
+#include "stdlib.h"
 
 #define MCP4725_DISABLE_SANITY_CHECK     //disable some sanity checks to increase speed, use with caution
 
