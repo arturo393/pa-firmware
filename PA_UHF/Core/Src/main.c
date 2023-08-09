@@ -133,7 +133,6 @@ int main(void) {
 	MX_I2C1_Init();
 
 	/* USER CODE BEGIN 2 */
-
 	HAL_StatusTypeDef res;
 
 	pa = paInit();

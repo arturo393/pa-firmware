@@ -70,6 +70,7 @@ void ds18b20_write_byte(uint8_t data) {
 
 uint8_t ds18b20_read_byte(void) {
 	uint8_t value = 0;
+
 	set_vdd_as_input();
 	for (int i = 0; i < 8; i++) {
 		set_vdd_as_output();
@@ -80,7 +81,7 @@ uint8_t ds18b20_read_byte(void) {
 		if (READ_BIT(GPIOB->IDR, GPIO_ODR_OD2))  // if the pin is HIGH
 			value |= 1 << i;  // read = 1
 		delay_us(50);  // wait for 60 us
-	}
+
 	return value;
 }
 

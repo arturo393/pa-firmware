@@ -67,8 +67,8 @@ HAL_StatusTypeDef readPage(I2C_HandleTypeDef *i2c, uint8_t page, uint8_t *data,
 
 HAL_StatusTypeDef savePage(I2C_HandleTypeDef *i2c, uint8_t page, uint8_t *data,
 		uint8_t offset, uint8_t size) {
-	uint8_t buff[16 + 1]={0};
-	uint8_t read[16]={0};
+	uint8_t buff[MAX_DATA + 1]={0};
+	uint8_t read[MAX_DATA]={0};
 	uint8_t i = 0;
 	HAL_StatusTypeDef res;
 	res = readPage(i2c, page, read, offset, size);

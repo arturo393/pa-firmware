@@ -438,14 +438,14 @@ uint8_t MCP4725_writeComand(MCP4725 *_MCP4725, uint16_t value,
 uint16_t MCP4725_readRegister(MCP4725 *_MCP4725, MCP4725_READ_TYPE dataType) {
 	uint16_t value = dataType; //convert enum to integer to avoid compiler warnings
 	uint16_t ret_val = 0;
-	uint8_t buffer[dataType];
+	uint8_t buffer[MCP4725_READ_EEPROM];
 	HAL_StatusTypeDef I2C_Stat;
 
 	I2C_Stat = HAL_I2C_Master_Receive(_MCP4725->hi2c, _MCP4725->_i2cAddress,
 			buffer, dataType, 1000);
 
 	if (I2C_Stat != HAL_OK)
-		return MCP4725_ERROR;
+		return (MCP4725_ERROR);
 
 	/* read data from buffer */
 	switch (dataType) {
@@ -462,5 +462,5 @@ uint16_t MCP4725_readRegister(MCP4725 *_MCP4725, MCP4725_READ_TYPE dataType) {
 		break;
 	}
 
-	return ret_val;
+	return (ret_val);
 }

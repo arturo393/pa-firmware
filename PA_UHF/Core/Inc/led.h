@@ -1,4 +1,3 @@
-
 /*
  * led.h
  *
@@ -37,22 +36,22 @@
 #define LED_MAX_TEMPERATURE 75
 
 typedef enum{
-KEEP_ALIVE,
-CURRENT_LOW,
-CURRENT_NORMAL,
-CURRENT_HIGH,
-TEMPERATURE_OK,
-TEMPERATURE_HIGH,
-LED_CHANNELS
-}LED_CH_t;
+	KEEP_ALIVE,
+	CURRENT_LOW,
+	CURRENT_NORMAL,
+	CURRENT_HIGH,
+	TEMPERATURE_OK,
+	TEMPERATURE_HIGH,
+	LED_CHANNELS
+} LED_CH_t;
 
-typedef struct{
+typedef struct {
 	uint32_t startMillis;
 	GPIO_TypeDef *port;
 	uint16_t pin;
-}LED_INFO_t;
+} LED_INFO_t;
 
-typedef struct LED{
+typedef struct LED {
 	uint32_t ka;
 	uint32_t cl_counter;
 	uint32_t cn_counter;
@@ -60,8 +59,7 @@ typedef struct LED{
 	uint32_t sysrp_counter;
 	uint32_t tok_counter;
 	uint32_t th_counter;
-}LED_t;
-
+} LED_t;
 
 LED_INFO_t** ledInit(uint8_t ch);
 void currentUpdate(LED_INFO_t **l, int16_t current);
@@ -71,6 +69,5 @@ void kaUpdate(LED_INFO_t *l);
 void led_reset(LED_t *l);
 void led_current_update(int16_t current);
 void temperatureUpdate(LED_INFO_t **l, uint8_t temperature);
-
 
 #endif /* INC_LED_H_ */

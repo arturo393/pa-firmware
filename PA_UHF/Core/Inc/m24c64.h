@@ -28,6 +28,7 @@ extern "C" {
 #define PAGE_NUM 256
 #define IS_READY 0xaa
 #define PADDRPOSITION 5
+#define MAX_DATA
 
 // EEPROM ADDRESS (8bits)
 #define EEPROM_ADDR 0xa0

@@ -8,10 +8,20 @@
 #include <module.h>
 
 const uint8_t MODULE_ADDR = 0x08;
-const float ADC_CURRENT_FACTOR = 298.1818182f;
-const float ADC_VOLTAGE_FACTOR = 0.007404330f;
 const uint8_t MCP4706_CHIP_ADDR = 0b01100000;
-const float REFERENCE_VOLTAGE = 3.3f;
+
+#define PIN_ADC_VALUES_COUNT 46
+#define PIN_REAL_VALUES_COUNT 46
+#define POUT_ADC_VALUES_COUNT 9
+#define POUT_REAL_VALUES_COUNT 9
+
+const int16_t pinAdcValues[PIN_ADC_VALUES_COUNT] = { 440, 440, 440, 441, 442,
+		443, 450, 452, 456, 460, 465, 471, 479, 488, 498, 512, 526, 543, 563,
+		584, 608, 627, 638, 648, 659, 672, 688, 705, 724, 745, 768, 792, 818,
+		848, 877, 907 };
+const int16_t pinRealValues[PIN_REAL_VALUES_COUNT] = { -30, -29, -28, -27, -26,
+		-25, -19, -18, -17, -16, -15, -14, -13, -12, -11, -10, -9, -8, -7, -6,
+		-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 };
 
 POWER_AMPLIFIER_t* paInit() {
 	POWER_AMPLIFIER_t *p = malloc(sizeof(POWER_AMPLIFIER_t));
@@ -49,19 +59,20 @@ void startTimer3(uint8_t seconds) {
 void tooglePa(POWER_AMPLIFIER_t *pa) {
 	GPIO_PinState state;
 	if (pa->enable == ON) {
+
 		if (pa->tempOut > MAX_TEMPERATURE)
 			state = GPIO_PIN_RESET;
+
 		if (pa->tempOut < SAFE_TEMPERATURE) {
+//			if (pa->vswr > MAX_VSWR)
 			state = GPIO_PIN_SET;
-			if (pa->vswr > MAX_VSWR)
-				state = GPIO_PIN_RESET;
-			if (pa->vswr < MAX_VSWR)
-				state = GPIO_PIN_SET;
+//			else
+//				state = GPIO_PIN_SET;
 		}
 	}
 	if (pa->enable == OFF)
 		state = GPIO_PIN_RESET;
-	HAL_GPIO_WritePin(pa->port, pa->pin, pa->enable);
+	HAL_GPIO_WritePin(pa->port, pa->pin, state);
 }
 
 void processReceivedSerial(POWER_AMPLIFIER_t *p) {
@@ -150,7 +161,7 @@ uint8_t exec(POWER_AMPLIFIER_t *pa, uint8_t *dataReceived) {
 		saveData(pa, ATTENUATION);
 		break;
 	case SET_ENABLE_PA:
-		pa->enable = dataReceived[DATA_LENGHT2_INDEX];
+		pa->enable = dataReceived[DATA_START_INDEX];
 		break;
 	case SET_POUTLEVEL:
 		pOutLevel = dataReceived[DATA_START_INDEX];
@@ -175,11 +186,14 @@ uint8_t readEepromData(POWER_AMPLIFIER_t *p, EEPROM_SECTOR_t sector) {
 	I2C_HandleTypeDef *i2c = p->i2c;
 	BDA4601_t *attenuator = p->attenuator;
 	uint8_t result = 0; // Initialize result to 0 (success).
+	HAL_StatusTypeDef res;
 
 	switch (sector) {
 	case ATTENUATION:
-		attenuator->val = readByte(i2c, M24C64_PAGE_ADDR(0),
-		ATTENUATION_OFFSET);
+		res = readPage(i2c, M24C64_PAGE_ADDR(0), &(attenuator->val),
+		ATTENUATION_OFFSET, sizeof(attenuator->val));
+		if (res != HAL_OK)
+			attenuator->val = 0;
 		if (attenuator->val < MIN_DB_VALUE || attenuator->val > MAX_DB_VALUE) {
 			attenuator->val = 0;
 			result = 1; // Set result to 1 (error).
@@ -317,20 +331,28 @@ void paRawToReal(POWER_AMPLIFIER_t *pa) {
 	ADC_t *a = pa->adc;
 
 	// Map power values
-	pa->pRef = arduino_map_float(a->ma[POUT_CH], POUT_CH_L, POUT_CH_H,
-	POUT_REAL_L, POUT_REAL_H);
+	pa->pRef = arduino_map_float(a->ma[PREF_CH], PREF_CH_L, PREF_CH_H,
+	PREF_REAL_L, PREF_REAL_H);
 	pa->pOut = arduino_map_float(a->ma[POUT_CH], POUT_CH_L, POUT_CH_H,
 	POUT_REAL_L, POUT_REAL_H);
-	pa->gain = arduino_map_float(a->ma[POUT_CH], POUT_CH_L, POUT_CH_H,
-	POUT_REAL_L, POUT_REAL_H);
-	pa->pIn = arduino_map_float(a->ma[POUT_CH], POUT_CH_L, POUT_CH_H,
+	pa->gain = arduino_map_float(a->ma[GAIN_CH], GAIN_CH_L, GAIN_CH_H,
+	GAIN_REAL_L, GAIN_REAL_H);
+
+	if (a->ma[PIN_CH] <= 905) {
+		pa->pIn = (float) findNearestValue(a->ma[PIN_CH], pinAdcValues,
+				pinRealValues, PIN_ADC_VALUES_COUNT);
+	} else {
+		pa->pIn = arduino_map_float(a->ma[PIN_CH], PIN_CH_L, PIN_CH_H,
+		PIN_REAL_L, PIN_REAL_H);
+	}
+	pa->pOut = arduino_map_float(a->ma[POUT_CH], POUT_CH_L, POUT_CH_H,
 	POUT_REAL_L, POUT_REAL_H);
 
 	// Calculate VSWR
-	pa->vswr = vswrCalc(pa->pOut, pa->pRef);
+	pa->vswr = calculate_vswr(pa->pOut, pa->pRef);
 
 	// Map current and voltage values
-	pa->curr = arduino_map_uint16_t(a->ma[PIN_CH], CURR_CH_L, CURR_CH_H,
+	pa->curr = arduino_map_uint16_t(a->ma[CURRENT_CH], CURR_CH_L, CURR_CH_H,
 	CURR_REAL_L, CURR_REAL_H);
 	pa->vol = arduino_map_float(a->ma[VOLTAGE_CH], VOLT_CH_L, VOLT_CH_H,
 	VOLT_REAL_L, VOLT_REAL_H);
@@ -370,30 +392,47 @@ void printRaw(POWER_AMPLIFIER_t *pa) {
 	u->len = 0;
 }
 
-const float pow_table[] = { 1.000000f, 1.122018f, 1.258925f, 1.412538f,
-		1.584893f, 1.778279f, 1.995262f, 2.238721f, 2.511886f, 2.818383f,
-		3.162278f, 3.548134f, 3.981072f, 4.466836f, 5.011872f, 5.623413f,
-		6.309573f, 7.079458f, 7.943282f, 8.912509f, 10.000000f };
+// Lookup table for power calculation: pow_table[x] = 10^(x/20)
+const float pow_table[] = {
+    1.000000f, 1.122018f, 1.258925f, 1.412538f, 1.584893f, 1.778279f, 1.995262f,
+    2.238721f, 2.511886f, 2.818383f, 3.162278f, 3.548134f, 3.981072f, 4.466836f,
+    5.011872f, 5.623413f, 6.309573f, 7.079458f, 7.943282f, 8.912509f, 10.000000f
+};
 
 // Function to find the closest value to 'x' in the lookup table
 float find_closest(float x) {
-	int index = (int) (x * 2.0f);
-	return (pow_table[index]);
+    int index = (int)((x + 0.05) * 2.0f); // Adding 0.05 to round to the nearest integer
+    if (index < 0) {
+        index = 0;
+    } else if (index >= sizeof(pow_table) / sizeof(float)) {
+        index = sizeof(pow_table) / sizeof(float) - 1;
+    }
+    return pow_table[index];
 }
 
 // Function to calculate VSWR from reflected power (Pf_db) and output power (Pr_db)
-float vswrCalc(float Pf_db, float Pr_db) {
-	// Calculate the reflection coefficient in decibels
-	float gamma_db = Pr_db - Pf_db;
+float calculate_vswr(float Pf_db, float Pr_db) {
+    /* Validate the arguments */
+    if (Pf_db < Pr_db) {
+        /* Invalid case: reflected power is greater than transmitted power */
+        return -1.0f; /* Return a negative value to indicate an error */
+    }
+    if (Pf_db == Pr_db) {
+        /* Degenerate case: reflected power is equal to transmitted power */
+        return -1.0f; /* Return infinity to indicate an infinite VSWR */
+    }
+    // Calculate the reflection coefficient in decibels
+    float gamma_db = fabsf(Pr_db - Pf_db);
 
-	// Find the closest value to the reflection coefficient in the lookup table
-	float gamma = find_closest(gamma_db);
+    // Find the closest value to the reflection coefficient in the lookup table
+    float gamma = find_closest(gamma_db);
 
-	// Calculate the VSWR
-	float vswr = (1.0f + gamma) / (1.0f - gamma);
+    // Calculate the VSWR
+    float vswr = (1.0f + gamma) / (1.0f - gamma);
 
-	return (vswr);
+    return vswr;
 }
+
 float arduino_map_float(uint16_t value, uint16_t in_min, uint16_t in_max,
 		float out_min, float out_max) {
 	return ((value - in_min) * (out_max - out_min) / (in_max - in_min) + out_min);
@@ -428,7 +467,7 @@ PA_STATUS_t setDacLevel(POWER_AMPLIFIER_t *pa, POUT_LEVEL_t level) {
 		newVoltage = 2.35;
 		break;
 	default:
-		newVoltage = 2.2;
+		newVoltage = 1.6;
 		break;
 	}
 	float storedVoltage = MCP4725_getVoltage(pa->poutDac);
@@ -441,3 +480,20 @@ PA_STATUS_t setDacLevel(POWER_AMPLIFIER_t *pa, POUT_LEVEL_t level) {
 		pa->pOutLevel = level;
 	return (status);
 }
+
+int16_t findNearestValue(int16_t target, const int16_t *adc,
+		const int16_t *real, uint8_t samples) {
+	int16_t nearest = adc[0];
+	int16_t diff = abs(target - nearest);
+
+	for (size_t i = 1; i < samples; i++) {
+		int16_t currentDiff = abs(target - adc[i]);
+		if (currentDiff <= diff) {
+			nearest = real[i];
+			diff = currentDiff;
+		}
+	}
+
+	return (nearest);
+}
+

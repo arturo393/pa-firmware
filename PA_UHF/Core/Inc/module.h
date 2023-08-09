@@ -23,6 +23,7 @@
 #include "lm75.h"
 #include "ds18b20.h"
 
+#define REFERENCE_VOLTAGE 3.3
 #define EPSILON 0.0001
 #define MAX_TEMPERATURE 75
 #define SAFE_TEMPERATURE 50
@@ -45,20 +46,40 @@
 #define AOUT_0_20mA_OFFSET 4
 #define DOUT_OFFSET 6
 
-#define POUT_CH_L   400
-#define POUT_CH_H   700
-#define POUT_REAL_L -30.0
-#define POUT_REAL_H 0.0
+// ad8363
+#define POUT_CH_L   800
+#define POUT_CH_H   2033
+#define POUT_REAL_L 0
+#define POUT_REAL_H 19.8
 
-#define CURR_CH_L   700
-#define CURR_CH_H   700
-#define CURR_REAL_L 400
-#define CURR_REAL_H 460
+// MAX4003
+#define PIN_CH_L   906
+#define PIN_CH_H   1310
+#define PIN_REAL_L 10
+#define PIN_REAL_H 20.0
+
+// MAX4003
+#define PREF_CH_L   800
+#define PREF_CH_H   2033
+#define PREF_REAL_L 0
+#define PREF_REAL_H 19.8
+
+// SALIUDA DEL COMPARADOR QUE VA DIRECTO AL ATENUADOR
+
+#define GAIN_CH_L   1283
+#define GAIN_CH_H   3209
+#define GAIN_REAL_L 0
+#define GAIN_REAL_H 25
+
+#define CURR_CH_H   665
+#define CURR_REAL_H 383
+#define CURR_CH_L   45
+#define CURR_REAL_L 25
 
 #define VOLT_CH_L   779
 #define VOLT_CH_H   1303
-#define VOLT_REAL_L 12.39
-#define VOLT_REAL_H 21.25
+#define VOLT_REAL_L 1239
+#define VOLT_REAL_H 2125
 
 #define MAX4003_DBM_MAX 0
 #define MAX4003_DBM_MIN -30
@@ -67,12 +88,10 @@
 
 #define MAX4003_IS_CALIBRATED 0xAA
 
-typedef enum{
-	POUT_LOW,
-	POUT_MEDIUM,
-	POUT_NORMAL,
-	POUT_HIGH
-}POUT_LEVEL_t;
+
+typedef enum {
+	POUT_LOW, POUT_MEDIUM, POUT_NORMAL, POUT_HIGH
+} POUT_LEVEL_t;
 
 typedef enum {
 	ATTENUATION,
@@ -89,7 +108,7 @@ typedef enum {
 } EEPROM_SECTOR_t;
 
 typedef enum {
-	PA_UPDATE, PA_WAIT, PA_ERROR,PA_OK
+	PA_UPDATE, PA_WAIT, PA_ERROR, PA_OK
 } PA_STATUS_t;
 
 typedef enum MODULE_ID {
@@ -102,12 +121,12 @@ typedef enum MODULE_S {
 
 typedef struct MODULE {
 	uint8_t att;
-	float gain;
-	float pOut;
-	float pRef;
+	int8_t gain;
+	int8_t pOut;
+	int8_t pRef;
 	float vol;
-	float pIn;
-	float curr;
+	int8_t pIn;
+	uint16_t curr;
 	uint8_t enable;
 	float temp;
 	float tempOut;
@@ -123,19 +142,13 @@ typedef struct MODULE {
 	UART_t *serial;
 	BDA4601_t *attenuator;
 	I2C_HandleTypeDef *i2c;
+
 	LED_INFO_t **led;
 } POWER_AMPLIFIER_t;
 
 extern const uint8_t MODULE_ADDR;
 extern const uint8_t MODULE_FUNCTION;
-
-extern const float ADC_CURRENT_FACTOR;
-extern const float ADC_VOLTAGE_FACTOR;
 extern const uint8_t MCP4706_CHIP_ADDR;
-extern const float REFERENCE_VOLTAGE;
-extern const float MINIMUM_POWER;
-extern const float MAXIMUM_POWER;
-extern const float pow_table[];
 
 POWER_AMPLIFIER_t* paInit();
 void module_calc_parameters(POWER_AMPLIFIER_t m, uint16_t *media_array);
@@ -145,6 +158,7 @@ void print_parameters(UART1_t *u, POWER_AMPLIFIER_t *pa);
 void printParameters(POWER_AMPLIFIER_t *pa);
 void printRaw(POWER_AMPLIFIER_t *pa);
 float vswrCalc(float pf_db, float pr_db);
+float calculate_vswr(float pt_dbm, float pr_dbm);
 float arduino_map_float(uint16_t value, uint16_t in_min, uint16_t in_max,
 		float out_min, float out_max);
 uint16_t arduino_map_uint16_t(uint16_t value, uint16_t in_min, uint16_t in_max,
@@ -165,4 +179,6 @@ void paDacInit(POWER_AMPLIFIER_t *pa);
 void serialRestart(POWER_AMPLIFIER_t *pa, uint16_t timeout);
 void paRawToReal(POWER_AMPLIFIER_t *pa);
 PA_STATUS_t setDacLevel(POWER_AMPLIFIER_t *pa, POUT_LEVEL_t level);
+int16_t findNearestValue(int16_t target, const int16_t *adc,
+		const int16_t *real, uint8_t samples);
 #endif /* INC_LTEL_H_ */

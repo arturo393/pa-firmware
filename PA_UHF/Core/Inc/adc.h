@@ -39,7 +39,7 @@ typedef struct ADC_t {
 	uint8_t adcCounter[ADC_CHANNELS];
 	uint16_t adcReadings[ADC_CHANNELS][ADC_WINDOW_SIZE];
 	uint16_t ma[ADC_CHANNELS];
-	uint16_t adcSum[ADC_CHANNELS];
+	uint32_t adcSum[ADC_CHANNELS];
 	ADC_HandleTypeDef *handler;
 	ADC_Status_t status;
 	ADC_TypeDef *reg;
