@@ -19,7 +19,7 @@ void ds18b20_init() {
 
 void delay_us(uint16_t us) {
 	TIM16->CNT = 0;
-	TIM16->ARR = us ;
+	TIM16->ARR = us;
 	while (TIM16->CNT < us)
 		;
 
@@ -81,7 +81,7 @@ uint8_t ds18b20_read_byte(void) {
 		if (READ_BIT(GPIOB->IDR, GPIO_ODR_OD2))  // if the pin is HIGH
 			value |= 1 << i;  // read = 1
 		delay_us(50);  // wait for 60 us
-
+	}
 	return value;
 }
 
@@ -122,8 +122,6 @@ float ds18b20_read_temperature() {
 	}
 	return (0.0f);
 }
-
-
 
 uint8_t readTemperature() {
 	if (!DS18B20_Start()) {

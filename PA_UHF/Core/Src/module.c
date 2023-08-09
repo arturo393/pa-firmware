@@ -59,20 +59,34 @@ void startTimer3(uint8_t seconds) {
 void tooglePa(POWER_AMPLIFIER_t *pa) {
 	GPIO_PinState state;
 	if (pa->enable == ON) {
+		if ((HAL_GetTick() - pa->ouputMillis) > 1000) {
 
-		if (pa->tempOut > MAX_TEMPERATURE)
-			state = GPIO_PIN_RESET;
+			if (pa->tempOut > MAX_TEMPERATURE)
+				pa->ouputState = GPIO_PIN_RESET;
 
-		if (pa->tempOut < SAFE_TEMPERATURE) {
-//			if (pa->vswr > MAX_VSWR)
-			state = GPIO_PIN_SET;
-//			else
-//				state = GPIO_PIN_SET;
+			if (pa->tempOut < SAFE_TEMPERATURE) {
+				if (pa->vswr > MAX_VSWR) {
+					pa->ouputState = GPIO_PIN_RESET;
+					pa->status = POUT_VSWR_ALERT;
+				} else {
+					pa->ouputState = GPIO_PIN_SET;
+					pa->status = PA_OK;
+
+				}
+
+			}
 		}
 	}
 	if (pa->enable == OFF)
-		state = GPIO_PIN_RESET;
-	HAL_GPIO_WritePin(pa->port, pa->pin, state);
+		pa->ouputState = GPIO_PIN_RESET;
+
+	if (pa->ouputState != pa->lastOutputState) {
+		pa->lastOutputState = pa->ouputState;
+		if (pa->ouputState == GPIO_PIN_SET)
+			pa->ouputMillis = HAL_GetTick();
+	}
+
+	HAL_GPIO_WritePin(pa->port, pa->pin, pa->ouputState);
 }
 
 void processReceivedSerial(POWER_AMPLIFIER_t *p) {
@@ -141,7 +155,7 @@ uint8_t exec(POWER_AMPLIFIER_t *pa, uint8_t *dataReceived) {
 		responsePtr += sizeof(pa->pIn);
 		break;
 	case QUERY_PARAMETER_STR:
-		printParameters(pa);
+		//	printParameters(pa);
 		break;
 	case QUERY_ADC:
 		printRaw(pa);
@@ -328,6 +342,7 @@ void serialRestart(POWER_AMPLIFIER_t *pa, uint16_t timeout) {
 }
 
 void paRawToReal(POWER_AMPLIFIER_t *pa) {
+
 	ADC_t *a = pa->adc;
 
 	// Map power values
@@ -356,6 +371,7 @@ void paRawToReal(POWER_AMPLIFIER_t *pa) {
 	CURR_REAL_L, CURR_REAL_H);
 	pa->vol = arduino_map_float(a->ma[VOLTAGE_CH], VOLT_CH_L, VOLT_CH_H,
 	VOLT_REAL_L, VOLT_REAL_H);
+	pa->vol /= 100;
 
 	// Read temperature values
 	pa->tempOut = readTemperature();
@@ -393,44 +409,43 @@ void printRaw(POWER_AMPLIFIER_t *pa) {
 }
 
 // Lookup table for power calculation: pow_table[x] = 10^(x/20)
-const float pow_table[] = {
-    1.000000f, 1.122018f, 1.258925f, 1.412538f, 1.584893f, 1.778279f, 1.995262f,
-    2.238721f, 2.511886f, 2.818383f, 3.162278f, 3.548134f, 3.981072f, 4.466836f,
-    5.011872f, 5.623413f, 6.309573f, 7.079458f, 7.943282f, 8.912509f, 10.000000f
-};
+const float pow_table[] = { 1.000000f, 1.122018f, 1.258925f, 1.412538f,
+		1.584893f, 1.778279f, 1.995262f, 2.238721f, 2.511886f, 2.818383f,
+		3.162278f, 3.548134f, 3.981072f, 4.466836f, 5.011872f, 5.623413f,
+		6.309573f, 7.079458f, 7.943282f, 8.912509f, 10.000000f };
 
 // Function to find the closest value to 'x' in the lookup table
 float find_closest(float x) {
-    int index = (int)((x + 0.05) * 2.0f); // Adding 0.05 to round to the nearest integer
-    if (index < 0) {
-        index = 0;
-    } else if (index >= sizeof(pow_table) / sizeof(float)) {
-        index = sizeof(pow_table) / sizeof(float) - 1;
-    }
-    return pow_table[index];
+	int index = (int) ((x + 0.05) * 2.0f); // Adding 0.05 to round to the nearest integer
+	if (index < 0) {
+		index = 0;
+	} else if (index >= sizeof(pow_table) / sizeof(float)) {
+		index = sizeof(pow_table) / sizeof(float) - 1;
+	}
+	return pow_table[index];
 }
 
 // Function to calculate VSWR from reflected power (Pf_db) and output power (Pr_db)
 float calculate_vswr(float Pf_db, float Pr_db) {
-    /* Validate the arguments */
-    if (Pf_db < Pr_db) {
-        /* Invalid case: reflected power is greater than transmitted power */
-        return -1.0f; /* Return a negative value to indicate an error */
-    }
-    if (Pf_db == Pr_db) {
-        /* Degenerate case: reflected power is equal to transmitted power */
-        return -1.0f; /* Return infinity to indicate an infinite VSWR */
-    }
-    // Calculate the reflection coefficient in decibels
-    float gamma_db = fabsf(Pr_db - Pf_db);
+	/* Validate the arguments */
+	if (Pf_db < Pr_db) {
+		/* Invalid case: reflected power is greater than transmitted power */
+		return (0); /* Return a negative value to indicate an error */
+	}
+	if (Pf_db == Pr_db) {
+		/* Degenerate case: reflected power is equal to transmitted power */
+		return (0); /* Return infinity to indicate an infinite VSWR */
+	}
+	// Calculate the reflection coefficient in decibels
+	float gamma_db = fabsf(Pr_db - Pf_db);
 
-    // Find the closest value to the reflection coefficient in the lookup table
-    float gamma = find_closest(gamma_db);
+	// Find the closest value to the reflection coefficient in the lookup table
+	float gamma = find_closest(gamma_db);
 
-    // Calculate the VSWR
-    float vswr = (1.0f + gamma) / (1.0f - gamma);
+	// Calculate the VSWR
+	float vswr = (1.0f + gamma) / (1.0f - gamma);
 
-    return vswr;
+	return (fabsf(vswr));
 }
 
 float arduino_map_float(uint16_t value, uint16_t in_min, uint16_t in_max,

@@ -90,7 +90,7 @@
 
 
 typedef enum {
-	POUT_LOW, POUT_MEDIUM, POUT_NORMAL, POUT_HIGH
+	POUT_LOW, POUT_MEDIUM, POUT_NORMAL, POUT_HIGH,
 } POUT_LEVEL_t;
 
 typedef enum {
@@ -108,7 +108,7 @@ typedef enum {
 } EEPROM_SECTOR_t;
 
 typedef enum {
-	PA_UPDATE, PA_WAIT, PA_ERROR, PA_OK
+	PA_UPDATE, PA_WAIT, PA_ERROR, PA_OK,POUT_VSWR_ALERT
 } PA_STATUS_t;
 
 typedef enum MODULE_ID {
@@ -128,8 +128,10 @@ typedef struct MODULE {
 	int8_t pIn;
 	uint16_t curr;
 	uint8_t enable;
-	float temp;
-	float tempOut;
+	uint8_t temp;
+	uint8_t tempOut;
+	GPIO_PinState ouputState;
+	GPIO_PinState lastOutputState;
 	float vswr;
 	POUT_LEVEL_t pOutLevel;
 	uint8_t id;
@@ -142,8 +144,8 @@ typedef struct MODULE {
 	UART_t *serial;
 	BDA4601_t *attenuator;
 	I2C_HandleTypeDef *i2c;
-
 	LED_INFO_t **led;
+	uint32_t ouputMillis;
 } POWER_AMPLIFIER_t;
 
 extern const uint8_t MODULE_ADDR;

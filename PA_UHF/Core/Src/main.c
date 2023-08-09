@@ -146,7 +146,6 @@ int main(void) {
 	paAdcInit(pa);
 	paUsart1Init(pa);
 	paLedInit(pa);
-
 	paDacInit(pa);
 	HAL_Delay(100);
 	res = lm75Init(pa->i2c);
