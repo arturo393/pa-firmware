@@ -1,22 +1,20 @@
 /*
-eeprom.c * bda4601.c
+ eeprom.c * bda4601.c
  *
  *  Created on: Sep 26, 2022
  *      Author: sigmadev
  */
 #include "bda4601.h"
 
+void bda4601_init(uint8_t att) {
 
-void bda4601_init(uint8_t att){
-	void bda460_init(){
-
-	 bda4601_pin_init();
-	if (att > 0 && att < 30)
+	bda4601_pin_init();
+	if (att > MIN_DB_VALUE && att < MAX_DB_VALUE)
 		bda4601_set_initial_att(att, STARTING_MILLIS);
 	else
-		bda4601_set_att(0, 3);
-	}
+		bda4601_set_att(MIN_DB_VALUE, TIMES);
 }
+
 void bda4601_pin_init(void) {
 
 	/* DATA_ATT  PB1 as output */
@@ -79,5 +77,45 @@ void bda4601_set_initial_att(uint8_t value, uint16_t period_millis) {
 		}
 		HAL_Delay(t_step);
 	}
+}
 
+void setInitialAttenuation(BDA4601_t *b, uint16_t millis) {
+	uint16_t t_step = 500;
+	uint16_t times = millis / t_step;
+	int att_step = b->val / times;
+	int att = 0;
+
+	for (int i = 0; i <= times; i++) {
+		setAttenuation(b);
+		att += att_step;
+		if (att >= MAX_DB_VALUE) {
+			return;
+		}
+		HAL_Delay(t_step);
+	}
+}
+
+void setAttenuation(BDA4601_t *b) {
+	uint8_t val = b->val;
+	if (val < MIN_DB_VALUE || val > MAX_DB_VALUE) {
+		val = MIN_DB_VALUE;
+	}
+	val *= 2;
+	for (uint8_t i = 0; i < TIMES; i++) {
+		uint8_t mask = 0b00100000;
+		for (uint8_t j = 0; j < 6; j++) {
+			if (mask & val)
+				HAL_GPIO_WritePin(b->dataPort, b->dataPin, GPIO_PIN_SET); //Pin data en alto
+			 else
+				HAL_GPIO_WritePin(b->dataPort, b->dataPin, GPIO_PIN_RESET); //Pin data en bajo
+
+			HAL_GPIO_WritePin(b->clkPort, b->clkPin, GPIO_PIN_SET); //Pin clock en alto
+			HAL_Delay(1); //Delay de 1mS
+			HAL_GPIO_WritePin(b->clkPort, b->clkPin, GPIO_PIN_RESET); //Pin clock en bajo
+			mask = mask >> 1; //Muevo la máscara una posición
+		}
+		HAL_GPIO_WritePin(b->lePort, b->lePin, GPIO_PIN_SET); //Pin LE en alto
+		HAL_Delay(1);
+		HAL_GPIO_WritePin(b->lePort, b->lePin, GPIO_PIN_RESET); //Pin LE en bajo
+	}
 }

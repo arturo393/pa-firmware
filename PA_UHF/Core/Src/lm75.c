@@ -1,10 +1,10 @@
 #include "lm75.h"
 
-void lm75_init(void ) {
+void lm75_init(void) {
 	uint8_t cmd[2];
 	cmd[0] = LM75_Conf;
 	cmd[1] = 0x0;
-	i2c1_byte_tx(LM75_ADDR<<1, cmd, 2);
+	i2c1_byte_tx(LM75_ADDR << 1, cmd, 2);
 }
 
 float lm75_read(void) {
@@ -12,9 +12,35 @@ float lm75_read(void) {
 	float result = 0;
 	cmd[0] = LM75_Temp;
 
-	i2c1_byte_tx( LM75_ADDR<<1, cmd, 1); // Send command string
+	i2c1_byte_tx( LM75_ADDR << 1, cmd, 1); // Send command string
 	HAL_Delay(1);
-	i2c1_buffReceive(LM75_ADDR<<1 | 1, cmd, 2); // Send command string
+	i2c1MasterFrameRx(LM75_ADDR << 1 | 1, cmd, 2); // Send command string
 	result = (float) ((cmd[0] << 8) | cmd[1]) / 256.0f;
-	return result;
+	return (result);
+}
+
+HAL_StatusTypeDef lm75Init(I2C_HandleTypeDef *i2c) {
+	uint8_t cmd[2];
+	uint8_t len;
+	cmd[0] = LM75_Conf;
+	cmd[1] = 0x0;
+	len = sizeof(cmd);
+	return (HAL_I2C_Master_Transmit(i2c, LM75_ADDR << 1, cmd, len,
+	HAL_MAX_DELAY));
+}
+
+uint8_t lm75Read(I2C_HandleTypeDef *i2c) {
+	uint8_t cmd[2];
+	HAL_StatusTypeDef res;
+	cmd[0] = LM75_Temp;
+	res = HAL_I2C_Master_Transmit(i2c, LM75_ADDR << 1, cmd, 1,
+	HAL_MAX_DELAY);
+	if (res != HAL_OK)
+		return (0);
+	HAL_Delay(1);
+	HAL_I2C_Master_Receive(i2c, LM75_ADDR << 1 | 1, cmd, 2,
+	HAL_MAX_DELAY);
+	if (res != HAL_OK)
+		return (0);
+	return (((cmd[0] << 8) | cmd[1]) / 256.0f);
 }

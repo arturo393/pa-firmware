@@ -1,4 +1,3 @@
-
 /*
  * led.h
  *
@@ -10,6 +9,7 @@
 #define INC_LED_H_
 
 #include "main.h"
+#include "stdlib.h"
 
 #define  current_low_led_on() CLEAR_BIT(GPIOA->ODR,GPIO_ODR_OD12)
 #define current_low_led_off() SET_BIT(GPIOA->ODR,GPIO_ODR_OD12)
@@ -35,25 +35,39 @@
 #define LED_MIN_CURRENT 100
 #define LED_MAX_TEMPERATURE 75
 
+typedef enum{
+	KEEP_ALIVE,
+	CURRENT_LOW,
+	CURRENT_NORMAL,
+	CURRENT_HIGH,
+	TEMPERATURE_OK,
+	TEMPERATURE_HIGH,
+	LED_CHANNELS
+} LED_CH_t;
 
-typedef struct LED{
-	uint32_t ka_counter;
+typedef struct {
+	uint32_t startMillis;
+	GPIO_TypeDef *port;
+	uint16_t pin;
+} LED_INFO_t;
+
+typedef struct LED {
+	uint32_t ka;
 	uint32_t cl_counter;
 	uint32_t cn_counter;
 	uint32_t ch_counter;
 	uint32_t sysrp_counter;
 	uint32_t tok_counter;
 	uint32_t th_counter;
-}LED_t;
+} LED_t;
 
-
-
+LED_INFO_t** ledInit(uint8_t ch);
+void currentUpdate(LED_INFO_t **l, int16_t current);
 void led_init(LED_t *led);
 void led_off(void);
-void led_enable_kalive(LED_t *l);
+void kaUpdate(LED_INFO_t *l);
 void led_reset(LED_t *l);
 void led_current_update(int16_t current);
-uint8_t led_temperature_update(uint8_t tempearture);
-
+void temperatureUpdate(LED_INFO_t **l, uint8_t temperature);
 
 #endif /* INC_LED_H_ */

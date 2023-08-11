@@ -1,3 +1,0 @@
-../Core/Src/max4003.c:9:9:max4003_get_dbm	24	static
-../Core/Src/max4003.c:24:7:max4003_check_calibration	16	static
-../Core/Src/max4003.c:28:7:max4003_vswr_calc	40	static

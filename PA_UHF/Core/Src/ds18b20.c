@@ -19,7 +19,7 @@ void ds18b20_init() {
 
 void delay_us(uint16_t us) {
 	TIM16->CNT = 0;
-	TIM16->ARR = us ;
+	TIM16->ARR = us;
 	while (TIM16->CNT < us)
 		;
 
@@ -51,6 +51,7 @@ void ds18b20_write1() {
 }
 
 void ds18b20_write0() {
+
 	set_vdd_as_output();
 	set_vdd_low();
 	delay_us(65); // wait for 60 us
@@ -70,6 +71,7 @@ void ds18b20_write_byte(uint8_t data) {
 
 uint8_t ds18b20_read_byte(void) {
 	uint8_t value = 0;
+
 	set_vdd_as_input();
 	for (int i = 0; i < 8; i++) {
 		set_vdd_as_output();
@@ -99,24 +101,42 @@ void set_vdd_as_input() {
 void ds18b20_convert() {
 	if (!DS18B20_Start()) {
 		HAL_Delay(1);
-		ds18b20_write_byte(0xCC); // skip ROM
-		ds18b20_write_byte(0x44); // convert t
+		ds18b20_write_byte(DS18B202_SKIP_ROM); // skip ROM
+		ds18b20_write_byte(DS18B20_CONVERT); // convert t
 //		HAL_Delay(800);
 	}
 }
 
 float ds18b20_read_temperature() {
 	if (!DS18B20_Start()) {
-		uint8_t Temp_byte1, Temp_byte2;
+		uint8_t Temp_byte1;
+		uint8_t Temp_byte2;
 		int TEMP = 0;
 		HAL_Delay(1);
-		ds18b20_write_byte(0xCC); // skip ROM
-		ds18b20_write_byte(0xBE); // Read Scratch-pad
+		ds18b20_write_byte(DS18B202_SKIP_ROM); // skip ROM
+		ds18b20_write_byte(DS18B20_READ_SCRATCHPAD); // Read Scratch-pad
 		TEMP = 0;
 		Temp_byte1 = ds18b20_read_byte();
 		Temp_byte2 = ds18b20_read_byte();
 		TEMP = (Temp_byte2 << 8) | Temp_byte1;
 		return (float) TEMP / 16.0;
 	}
-	return 0.0f;
+	return (0.0f);
+}
+
+uint8_t readTemperature() {
+	if (!DS18B20_Start()) {
+		uint8_t Temp_byte1;
+		uint8_t Temp_byte2;
+		int TEMP = 0;
+		HAL_Delay(1);
+		ds18b20_write_byte(DS18B202_SKIP_ROM); // skip ROM
+		ds18b20_write_byte(DS18B20_READ_SCRATCHPAD); // Read Scratch-pad
+		TEMP = 0;
+		Temp_byte1 = ds18b20_read_byte();
+		Temp_byte2 = ds18b20_read_byte();
+		TEMP = (Temp_byte2 << 8) | Temp_byte1;
+		return ((uint8_t) (TEMP / 16.0));
+	}
+	return (0);
 }
