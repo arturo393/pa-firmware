@@ -53,7 +53,7 @@
 #define POUT_REAL_H 19.8
 
 // MAX4003
-#define PIN_CH_L   906
+#define PIN_CH_L   985
 #define PIN_CH_H   1310
 #define PIN_REAL_L 10
 #define PIN_REAL_H 20.0
@@ -67,9 +67,9 @@
 // SALIUDA DEL COMPARADOR QUE VA DIRECTO AL ATENUADOR
 
 #define GAIN_CH_L   1283
-#define GAIN_CH_H   3209
+#define GAIN_CH_H   2033
 #define GAIN_REAL_L 0
-#define GAIN_REAL_H 25
+#define GAIN_REAL_H 19.8
 
 #define CURR_CH_H   665
 #define CURR_REAL_H 383
@@ -88,9 +88,14 @@
 
 #define MAX4003_IS_CALIBRATED 0xAA
 
+#define PIN_ADC_VALUES_COUNT 46
+#define PIN_REAL_VALUES_COUNT 46
+#define POUT_ADC_VALUES_COUNT 9
+#define POUT_REAL_VALUES_COUNT 9
+
 
 typedef enum {
-	POUT_LOW, POUT_MEDIUM, POUT_NORMAL, POUT_HIGH,
+	POUT_LOW, POUT_MEDIUM, POUT_NORMAL, POUT_HIGH, POUT_LEVEL_VALUES
 } POUT_LEVEL_t;
 
 typedef enum {
@@ -120,19 +125,20 @@ typedef enum MODULE_S {
 } State_t;
 
 typedef struct MODULE {
-	uint8_t att;
-	int8_t gain;
-	int8_t pOut;
-	int8_t pRef;
-	float vol;
-	int8_t pIn;
-	uint16_t curr;
 	uint8_t enable;
 	uint8_t temp;
+	int8_t gain;
+	float vswr;
+	int8_t pOut;
+	int8_t pIn;
+	int8_t pReflected;
+	int8_t pReference;
+	float vol;
+	uint16_t curr;
+	uint16_t agcRef;
 	uint8_t tempOut;
 	GPIO_PinState ouputState;
 	GPIO_PinState lastOutputState;
-	float vswr;
 	POUT_LEVEL_t pOutLevel;
 	uint8_t id;
 	uint8_t function;
@@ -143,6 +149,7 @@ typedef struct MODULE {
 	MCP4725 *poutDac;
 	UART_t *serial;
 	BDA4601_t *attenuator;
+
 	I2C_HandleTypeDef *i2c;
 	LED_INFO_t **led;
 	uint32_t ouputMillis;
@@ -151,6 +158,7 @@ typedef struct MODULE {
 extern const uint8_t MODULE_ADDR;
 extern const uint8_t MODULE_FUNCTION;
 extern const uint8_t MCP4706_CHIP_ADDR;
+extern const float POUT_REF[POUT_LEVEL_VALUES];
 
 POWER_AMPLIFIER_t* paInit();
 void module_calc_parameters(POWER_AMPLIFIER_t m, uint16_t *media_array);
@@ -167,6 +175,8 @@ uint16_t arduino_map_uint16_t(uint16_t value, uint16_t in_min, uint16_t in_max,
 		uint16_t out_min, uint16_t out_max);
 int8_t arduino_map_int8_t(uint16_t value, uint16_t in_min, uint16_t in_max,
 		int8_t out_min, int8_t out_max);
+uint16_t arduino_map_float_to_uin16_t(float value, float in_min, float in_max,
+		uint16_t out_min, uint16_t out_max);
 void rs485_set_query_frame(POWER_AMPLIFIER_t *module);
 void processReceivedSerial(POWER_AMPLIFIER_t *p);
 uint8_t exec(POWER_AMPLIFIER_t *pa, uint8_t *dataReceived);

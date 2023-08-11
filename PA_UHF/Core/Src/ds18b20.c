@@ -51,6 +51,7 @@ void ds18b20_write1() {
 }
 
 void ds18b20_write0() {
+
 	set_vdd_as_output();
 	set_vdd_low();
 	delay_us(65); // wait for 60 us

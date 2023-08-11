@@ -8,9 +8,9 @@
 #ifndef INC_RDSS_H_
 #define INC_RDSS_H_
 
+#include <pa.h>
 #include "main.h"
 #include "stdbool.h"
-#include "module.h"
 #include "uart1.h"
 #include "stdio.h"
 #include "string.h"

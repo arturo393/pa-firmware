@@ -17,14 +17,13 @@
  */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
+#include <pa.h>
 #include "main.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <string.h>
 #include "utils.h"
-#include "module.h"
-#include "ad8363.h"
 
 /* USER CODE END Includes */
 
@@ -66,9 +65,6 @@ static void MX_IWDG_Init(void);
 static void MX_I2C1_Init(void);
 /* USER CODE BEGIN PFP */
 // UART1 interrupt handler
-void TIM3_IRQHandler(void) {
-	CLEAR_BIT(TIM3->SR, TIM_SR_UIF);
-}
 
 // UART1 interrupt handler
 void USART1_IRQHandler(void) {
@@ -152,7 +148,6 @@ int main(void) {
 	if (res != HAL_OK)
 		Error_Handler();
 
-	startTimer3(1);
 	ds18b20_init();
 	/* USER CODE END 2 */
 
