@@ -12,7 +12,7 @@ void bda4601_init(uint8_t att) {
 	if (att > MIN_DB_VALUE && att < MAX_DB_VALUE)
 		bda4601_set_initial_att(att, STARTING_MILLIS);
 	else
-		bda4601_set_att(MIN_DB_VALUE, TIMES);
+		set_attenuation_to_bda4601(MIN_DB_VALUE, TIMES);
 }
 
 void bda4601_pin_init(void) {
@@ -29,7 +29,7 @@ void bda4601_pin_init(void) {
 
 }
 
-void bda4601_set_att(uint8_t val, uint8_t times) {
+void set_attenuation_to_bda4601(uint8_t val, uint8_t times) {
 
 	if (val < MIN_DB_VALUE || val > MAX_DB_VALUE) {
 		val = MIN_DB_VALUE;
@@ -70,7 +70,7 @@ void bda4601_set_initial_att(uint8_t value, uint16_t period_millis) {
 	int att = 0;
 
 	for (int i = 0; i <= times; i++) {
-		bda4601_set_att(att, 2);
+		set_attenuation_to_bda4601(att, 2);
 		att += att_step;
 		if (att >= MAX_DB_VALUE) {
 			return;

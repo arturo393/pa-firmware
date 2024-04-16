@@ -22,13 +22,14 @@ extern "C" {
 
 #include "main.h"
 #include "string.h"
+#include "stdlib.h"
 
 #define CHIP_ADDR 0xa0
 #define PAGE_SIZE 32
 #define PAGE_NUM 256
 #define IS_READY 0xaa
 #define PADDRPOSITION 5
-#define MAX_DATA
+#define MAX_DATA 10
 
 // EEPROM ADDRESS (8bits)
 #define EEPROM_ADDR 0xa0

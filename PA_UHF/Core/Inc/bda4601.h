@@ -28,7 +28,7 @@ typedef struct{
 
 void bda4601_init(uint8_t att);
 void bda4601_pin_init(void);
-void bda4601_set_att(uint8_t, uint8_t);
+void set_attenuation_to_bda4601(uint8_t, uint8_t);
 void bda4601_set_initial_att(uint8_t, uint16_t );
 void setAttenuation(BDA4601_t *b);
 void setInitialAttenuation(BDA4601_t *b, uint16_t millis);

@@ -112,6 +112,7 @@ typedef struct {
 	uint8_t queryBuffer[QUERY_STATUS_BUFFER_SIZE];
 	uint32_t lastUpdateTicks;
 } RDSS_t;
+
 uint16_t crc_get(uint8_t* buffer, uint8_t buff_len);
 RDSS_status_t checkCRCValidity(uint8_t *frame, uint8_t len);
 uint8_t setCrc(uint8_t *buff, uint8_t size);

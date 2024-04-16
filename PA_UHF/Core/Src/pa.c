@@ -154,7 +154,7 @@ uint8_t exec(POWER_AMPLIFIER_t *pa, uint8_t *dataReceived) {
 		printParameters(pa);
 		break;
 	case QUERY_ADC:
-		printRaw(pa);
+//		printRaw(pa);
 		break;
 	case SET_ATT_LTEL:
 		pa->attenuator->val = dataReceived[DATA_START_INDEX];
@@ -228,8 +228,8 @@ HAL_StatusTypeDef saveData(POWER_AMPLIFIER_t *p, EEPROM_SECTOR_t sector) {
 		return (HAL_ERROR);
 		break;
 	}
-
-	res = savePage(i2c, page, data, offset, dataLen);
+	// TODO Revisar savePage
+	//res = savePage(i2c, page, data, offset, dataLen);
 	return (res);
 }
 
@@ -308,7 +308,7 @@ void paLedInit(POWER_AMPLIFIER_t *pa) {
 void paDacInit(POWER_AMPLIFIER_t *pa) {
 	PA_STATUS_t status;
 	pa->poutDac = MCP4725_init(pa->i2c, MCP4706_CHIP_ADDR, REFERENCE_VOLTAGE);
-	status = setDacLevel(pa, POUT_NORMAL);
+	status = setDacLevel(pa, POUT_HIGH);
 	if (status != PA_OK)
 		Error_Handler();
 }
